@@ -1,6 +1,6 @@
 # Thiết kế: RAG pháp luật lao động tiếng Việt end-to-end
 
-*Ngày: 2026-11-22 · Trạng thái: chờ duyệt · Nghiên cứu nền: `reports/Kiến trúc RAG tiếng Việt 2026.md` (nguồn và số liệu ở đó, file này không lặp lại).*
+*Ngày: 2026-11-22 · Trạng thái: chờ duyệt · Nghiên cứu nền: `docs/research/reports/Kiến trúc RAG tiếng Việt 2026.md` (nguồn và số liệu ở đó, file này không lặp lại).*
 
 ## 1. Mục đích và lý do
 

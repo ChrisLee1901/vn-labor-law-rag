@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Tài liệu nguồn công khai, không chứa secret"
+paths = [
+  '''docs/corpus/raw/''',
+  '''docs/research/''',
+]
