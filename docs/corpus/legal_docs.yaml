@@ -3,6 +3,7 @@
 docs:
   - code: BLLD
     number: 18/VBHN-VPQH
+    short_title: Bộ luật Lao động
     title: Văn bản hợp nhất số 18/VBHN-VPQH hợp nhất Bộ luật Lao động (Bộ luật số 45/2019/QH14)
     doc_type: vbhn
     issuer: Văn phòng Quốc hội
@@ -18,6 +19,7 @@ docs:
   # TODO(USER): xác minh tình trạng trên vbpl.vn (tra cứu web: chỉ có dự thảo sửa đổi 2026, chưa thấy NĐ sửa đổi được ban hành)
   - code: ND145-2020
     number: 145/2020/NĐ-CP
+    short_title: Điều kiện lao động và quan hệ lao động
     title: Nghị định số 145/2020/NĐ-CP quy định chi tiết và hướng dẫn thi hành một số điều của Bộ luật Lao động về điều kiện lao động và quan hệ lao động
     doc_type: nghi_dinh
     issuer: Chính phủ
@@ -32,6 +34,7 @@ docs:
 
   - code: ND293-2025
     number: 293/2025/NĐ-CP
+    short_title: Mức lương tối thiểu
     title: Nghị định số 293/2025/NĐ-CP quy định mức lương tối thiểu đối với người lao động làm việc theo hợp đồng lao động
     doc_type: nghi_dinh
     issuer: Chính phủ
@@ -46,6 +49,7 @@ docs:
 
   - code: ND399-2026
     number: 399/2026/NĐ-CP
+    short_title: Mức lương tối thiểu
     title: Nghị định số 399/2026/NĐ-CP quy định mức lương tối thiểu
     doc_type: nghi_dinh
     issuer: Chính phủ
@@ -62,6 +66,7 @@ docs:
 
   - code: LBHXH-2024
     number: 41/2024/QH15
+    short_title: Luật Bảo hiểm xã hội
     title: Luật số 41/2024/QH15 Bảo hiểm xã hội
     doc_type: luat
     issuer: Quốc hội
@@ -76,6 +81,7 @@ docs:
 
   - code: ND158-2025
     number: 158/2025/NĐ-CP
+    short_title: Bảo hiểm xã hội bắt buộc
     title: Nghị định số 158/2025/NĐ-CP quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm xã hội về bảo hiểm xã hội bắt buộc
     doc_type: nghi_dinh
     issuer: Chính phủ
@@ -90,6 +96,7 @@ docs:
 
   - code: LVL-2025
     number: 74/2025/QH15
+    short_title: Luật Việc làm
     title: Luật số 74/2025/QH15 Việc làm
     doc_type: luat
     issuer: Quốc hội
@@ -104,6 +111,7 @@ docs:
 
   - code: ND374-2025
     number: 374/2025/NĐ-CP
+    short_title: Bảo hiểm thất nghiệp
     title: Nghị định số 374/2025/NĐ-CP quy định chi tiết một số điều của Luật Việc làm về bảo hiểm thất nghiệp
     doc_type: nghi_dinh
     issuer: Chính phủ
