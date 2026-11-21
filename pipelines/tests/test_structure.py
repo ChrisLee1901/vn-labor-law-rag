@@ -82,3 +82,20 @@ def test_synthetic_rules():
     assert c1.points[1].text == "điểm b dài lắm nối sang dòng sau;"
     assert c2.number == 2 and arts[0].intro == "Văn bản này quy định như sau:"
     assert arts[1].intro == "Nội dung."
+
+
+def test_chapter_intro_kept_in_next_article_intro():
+    arts = {a.number: a for a in parse_document(extract_text("ND158-2025"), "ND158-2025")}
+    assert arts[6].intro.startswith("Đăng ký tham gia và quản lý thu, đóng bảo hiểm xã hội bắt buộc được thực hiện theo quy định tại Chương IV")
+    assert arts[6].intro.split("\n")[1].startswith("Việc đăng ký tham gia")
+
+
+def test_four_line_title_not_truncated():
+    a5 = parse_document(extract_text("ND145-2020"), "ND145-2020")[4]
+    assert a5.title.endswith("quyền biểu quyết") and a5.intro.startswith("Hợp đồng lao động")
+
+
+def test_point_with_footnote_digit():
+    a59 = {a.number: a for a in parse_document(extract_text("BLLD"), "BLLD")}[59]
+    assert [p.letter for p in a59.clauses[1].points] == ["a", "b"]
+    assert a59.clauses[1].points[0].text.startswith("Thành lập cơ sở")

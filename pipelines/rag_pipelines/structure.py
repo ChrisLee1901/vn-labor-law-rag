@@ -8,12 +8,13 @@ Heuristic chính (PDF bị ngắt dòng cứng, DOCX thì sạch):
   a b c d đ e g h i k l m n o p q r s t u v x y (reset ở mỗi khoản). Còn lại là dòng nối tiếp, nối bằng 1 dấu cách.
   Điểm đứng trước mọi khoản được đặt vào Khoản không số (number=None, text rỗng).
 - Dòng nằm trong trích dẫn “…” (văn bản sửa đổi) không bao giờ mở Khoản/Điểm mới; trạng thái trích dẫn reset ở mỗi Điều.
-- Tiêu đề Điều có thể ngắt dòng (tối đa 3 dòng): dòng kế tiếp được nối vào tiêu đề nếu dòng tiêu đề trước không kết thúc
+- Tiêu đề Điều có thể ngắt dòng (tối đa 5 dòng): dòng kế tiếp được nối vào tiêu đề nếu dòng tiêu đề trước không kết thúc
   bằng `. ; :`, dòng kế không giống khoản/điểm/Điều/Chương/Mục, không kết thúc bằng `. ; :`, và dòng kế bắt đầu bằng chữ
   thường (phần ngắt ở lề PDF) hoặc, với chữ hoa, dòng tiêu đề trước dài >= 60 ký tự (gồm "Điều N. "), kết thúc bằng từ
   viết hoa ("...Việt" / "Nam và...") và dòng kế < 60 ký tự. Còn lại là phần `intro` (thà giữ chữ ở intro còn hơn mất).
 - Khối cuối bị bỏ khi gặp dòng ký (TM./KT./CHỦ TỊCH QUỐC HỘI/XÁC THỰC VĂN BẢN HỢP NHẤT/Nơi nhận), câu chốt "Luật này được
   Quốc hội nước Cộng hòa..." hoặc dòng đơn lẻ "Phụ lục [số La Mã]". Số ký tự bị bỏ trả về từ parse_document_with_stats.
+- Lời dẫn nằm giữa dòng Chương/Mục và Điều kế tiếp được nối vào đầu `intro` của Điều đó (ngăn bằng dòng mới).
 - Chương/Mục: dòng `Chương IV` / `Mục 2` (hoặc kèm phần chữ HOA) + các dòng chữ HOA kế tiếp => "Chương IV. TÊN".
 """
 import re
@@ -23,7 +24,8 @@ _POINTS = "abcdđeghiklmnopqrstuvxy"
 _ARTICLE = re.compile(r"^Điều (\d+)([a-z]?)\.(?:\s+(.*))?$")
 # Bản hợp nhất có chú thích cuối trang dính sau số khoản: "3.3 Người sử dụng..." (khoản 3, chú thích 3).
 _CLAUSE = re.compile(r"^(\d+)\.(\d{1,2})?(?:\s+(.*))?$")
-_POINT = re.compile(r"^([a-zđ])\)(?:\s+(.*))?$")
+# Chú thích cuối trang cũng có thể dính sau chữ cái điểm: "a)2Thành lập..." (chữ hoa ngay sau số).
+_POINT = re.compile(r"^([a-zđ])\)(?:(\d{1,2})(?=[A-ZĐ])|(?=\s|$))\s*(.*)$")
 _CHAPTER = re.compile(r"^(Chương [IVXLC]+)\b\s*(.*)$")
 _SECTION = re.compile(r"^(Mục \d+)\b\s*(.*)$")
 # Khối ký / phụ lục / mẫu biểu sau Điều cuối (bảng DOCX có tiền tố "| ").
@@ -33,7 +35,7 @@ _END = re.compile(
     r"|^(?:PHỤ LỤC|Phụ lục)(?:\s+[IVXLC\d]+)?$"
 )
 _TITLE_MIN_WRAP = 60
-_TITLE_MAX_LINES = 3
+_TITLE_MAX_LINES = 5
 
 
 @dataclass
@@ -72,6 +74,7 @@ class _Open:
         self.intro: list[str] = []
         self.clauses: list[tuple[int | None, list[str], list[tuple[str, list[str]]]]] = []
         self.target = self.intro
+        self.pre = ""
 
     def numbered(self) -> int:
         return max((c[0] for c in self.clauses if c[0] is not None), default=0)
@@ -107,7 +110,8 @@ class _Open:
             return " ".join(parts).strip()
 
         clauses = [Clause(n, j(t), [Point(ltr, j(p)) for ltr, p in pts]) for n, t, pts in self.clauses]
-        return Article(code, self.num, self.suffix or None, j(self.title), self.chapter, self.section, j(self.intro), clauses)
+        intro = "\n".join(x for x in (self.pre, j(self.intro)) if x)
+        return Article(code, self.num, self.suffix or None, j(self.title), self.chapter, self.section, intro, clauses)
 
 
 def _is_upper(line: str) -> bool:
@@ -130,6 +134,7 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
     chapter = section = None
     last = (0, "")
     stop = len(lines)
+    carry: list[str] = []  # lời dẫn dưới Chương/Mục, trước Điều kế tiếp: gắn vào đầu intro của Điều đó
     quote = 0  # độ sâu dấu ngoặc kép “…” còn mở
     i = 0
 
@@ -165,6 +170,7 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
             if cur:
                 arts.append(cur.build(doc_code))
                 cur = None
+            carry = []
             continue
         m = _ARTICLE.match(line)
         if m:
@@ -175,11 +181,14 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
                 last = (n, suf)
                 quote = 0
                 cur = _Open(n, suf, m.group(3) or "", len(line), chapter, section)
+                cur.pre, carry = " ".join(carry), []
                 continue
             if 0 < last[0] and n <= last[0]:
                 stop = i - 1
                 break
         if cur is None:
+            if chapter:
+                carry.append(line)
             continue
         if cur.title_open:
             if cur.wants_title_line(line):
@@ -195,7 +204,7 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
             continue
         m = None if in_quote else _POINT.match(line)
         if m and cur.accepts_letter(m.group(1)):
-            cur.add_point(m.group(1), m.group(2) or "")
+            cur.add_point(m.group(1), m.group(3) or "")
             continue
         cur.target.append(line)
     if cur:
