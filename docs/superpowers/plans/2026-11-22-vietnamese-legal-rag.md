@@ -279,6 +279,27 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 - [ ] CLI in bảng theo văn bản: số Điều, Khoản, chunk, token (p50/p95/max), số ref (nội bộ corpus / ngoài corpus), số ký tự bị bỏ (phụ lục).
 - [ ] Chạy rồi commit `STATS.md`. **Đạt** khi tổng chunk nằm trong khoảng 2.000–8.000 và không có chunk > 450 token. Nếu lệch thì xem lại 1.4/1.5.
 
+### Task 1.8: Giữ Phụ lục danh mục địa bàn (bổ sung sau review 1.7)
+
+> Lý do: parser 1.4 bỏ toàn bộ phụ lục. Phụ lục NĐ 293/2025 "Danh mục địa bàn áp dụng mức lương tối thiểu từ 01/01/2026" (~21.7k ký tự, theo 34 tỉnh/thành sau sáp nhập) là căn cứ duy nhất cho câu hỏi kiểu "phường X thuộc vùng nào". Các phụ lục biểu mẫu (ND145, ND374, ND158) vẫn bỏ vì nhiễu.
+
+**Files:** Modify `docs/corpus/legal_docs.yaml` (thêm `keep_appendix: true` cho ND293-2025), `backend/app/legal/ids.py`, `pipelines/rag_pipelines/structure.py`, `pipelines/rag_pipelines/chunk.py`, `pipelines/rag_pipelines/stats.py`. Create `supabase/migrations/20261201000200_appendix_kind.sql`. Tests tương ứng.
+
+**Interfaces — Produces:**
+- `make_appendix_id(doc_code: str, appendix: int, item: int | None = None) -> str` → `ND293-2025:PL1` / `ND293-2025:PL1:M3`; `is_appendix_id(s: str) -> bool`.
+- `@dataclass Appendix(doc_code: str, number: int, title: str, items: list[tuple[int, str, str]])` (item number, heading như "Thành phố Hà Nội", text); `parse_appendices(text: str, doc_code: str) -> list[Appendix]`: bắt đầu từ dòng `^Phụ lục( [IVX]+)?$` sau khối chữ ký, tiêu đề là các dòng IN HOA tiếp theo + dòng "(Kèm theo …)", mục là `^(\d+)\. (.+)$` tăng dần, nội dung mục gồm các dòng "- Vùng …" (nối dòng bị wrap).
+- `chunk_appendices(appendices, doc, count_tokens, max_tokens=450) -> list[Chunk]`: 1 chunk/mục, id `make_appendix_id(code, n, item)`, `parent_id = make_appendix_id(code, n)`, breadcrumb `[{number} – {short_title}] Phụ lục {n}. {title} | {heading}:`; quá 450 token thì tách theo dòng "- Vùng …", rồi theo câu (`#k`).
+- Migration additive: `alter table articles add column kind text not null default 'dieu' check (kind in ('dieu','phu_luc'));` — phụ lục lưu vào `articles` với `kind='phu_luc'`, `number` = số phụ lục, `id` = `make_appendix_id(code, n)`.
+
+- [ ] Test hỏng:
+  - `test_nd293_appendix_parsed`: `parse_appendices(extract_text("ND293-2025"), "ND293-2025")` có 1 phụ lục, mục 1 heading "Thành phố Hà Nội", text chứa "Vùng I" và "Hoàn Kiếm"; số mục == 34.
+  - `test_appendix_chunks_ids_and_limit`: mọi chunk có id dạng `ND293-2025:PL1:M\d+(#\d+)?`, `n_tokens <= 450`; id duy nhất.
+  - `test_appendix_id_roundtrip`: `make_appendix_id("ND293-2025",1,3) == "ND293-2025:PL1:M3"`, `is_appendix_id(...)` True, `is_appendix_id("ND293-2025:D3")` False.
+  - `test_articles_kind_column` (supabase/tests): insert article kind 'phu_luc' ok; kind 'x' vi phạm check.
+  - Doc không có `keep_appendix` → không sinh chunk phụ lục.
+- [ ] Viết code; `stats.py` thêm cột "Chunk phụ lục". Chạy lại stats (tổng chunk vẫn trong 2.000–8.000, max ≤ 450).
+- [ ] Commit `feat(pipelines): keep ND293 locality appendix as chunks`.
+
 ---
 
 ## Phase 2 — Serving model trên Kaggle (song song với P1)
