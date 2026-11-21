@@ -20,3 +20,14 @@ def parse_id(s: str) -> tuple[str, int, int | None, str | None]:
         raise ValueError(f"invalid legal id: {s!r}")
     code, art, _suffix, clause, point = m.groups()
     return code, int(art), int(clause) if clause else None, point
+
+_APPENDIX_ID = re.compile(r"^[^:\s]+:PL\d+(?::M\d+)?$")
+
+
+def make_appendix_id(doc_code: str, appendix: int, item: int | None = None) -> str:
+    """Phụ lục: `<doc_code>:PL<n>[:M<mục>]`, vd `ND293-2025:PL1:M3`."""
+    return f"{doc_code}:PL{appendix}" + (f":M{item}" if item is not None else "")
+
+
+def is_appendix_id(s: str) -> bool:
+    return bool(_APPENDIX_ID.match(s))

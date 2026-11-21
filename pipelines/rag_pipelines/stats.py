@@ -7,13 +7,13 @@ from pathlib import Path
 import yaml
 from app.legal.refs import extract_refs
 
-from rag_pipelines.chunk import chunk_articles, default_count_tokens
+from rag_pipelines.chunk import appendix_chunks_for, chunk_articles, default_count_tokens
 from rag_pipelines.extract import extract_text
 from rag_pipelines.structure import parse_document_with_stats
 
 MAX_TOKENS = 450
 CHUNK_RANGE = (2000, 8000)
-HEAD = ["Văn bản", "Điều", "Khoản", "Điểm", "Chunk", "Token p50", "Token p95", "Token max",
+HEAD = ["Văn bản", "Điều", "Khoản", "Điểm", "Chunk", "Chunk phụ lục", "Token p50", "Token p95", "Token max",
         "Ref trong corpus", "Ref ngoài corpus", "Ref explicit_doc=False", "Ký tự bị bỏ"]
 
 
@@ -24,13 +24,13 @@ def percentile(xs: list[int], p: float) -> int:
 
 
 def _row(name: str, n: dict, toks: list[int]) -> list:
-    return [name, n["art"], n["cl"], n["pt"], len(toks), percentile(toks, 50), percentile(toks, 95), max(toks, default=0),
+    return [name, n["art"], n["cl"], n["pt"], len(toks), n["app"], percentile(toks, 50), percentile(toks, 95), max(toks, default=0),
             n["in"], n["out"], n["imp"], n["drop"]]
 
 
 def render_table(rows: list[tuple[str, dict, list[int]]]) -> str:
     """rows = (tên, đếm, danh sách token mỗi chunk); thêm dòng Tổng."""
-    keys = ("art", "cl", "pt", "in", "out", "imp", "drop")
+    keys = ("art", "cl", "pt", "in", "out", "imp", "drop", "app")
     total = ({k: sum(r[1][k] for r in rows) for k in keys}, [t for r in rows for t in r[2]])
     body = [_row(n, c, t) for n, c, t in rows] + [_row("**Tổng**", *total)]
     lines = ["| " + " | ".join(HEAD) + " |", "|" + "---|" * len(HEAD)]
@@ -39,9 +39,11 @@ def render_table(rows: list[tuple[str, dict, list[int]]]) -> str:
 
 def collect(doc: dict, count_tokens) -> tuple[dict, list[int]]:
     code = doc["code"]
-    arts, dropped = parse_document_with_stats(extract_text(code), code)
+    text = extract_text(code)
+    arts, dropped = parse_document_with_stats(text, code)
     chunks = chunk_articles(arts, doc, count_tokens, MAX_TOKENS)
-    n = dict(art=len(arts), cl=0, pt=0, **{"in": 0, "out": 0, "imp": 0}, drop=dropped)
+    app = appendix_chunks_for(doc, text, count_tokens, MAX_TOKENS)  # phụ lục vẫn nằm trong "Ký tự bị bỏ" (parser Điều bỏ khối cuối)
+    n = dict(art=len(arts), cl=0, pt=0, **{"in": 0, "out": 0, "imp": 0}, drop=dropped, app=len(app))
     for a in arts:
         n["cl"] += sum(c.number is not None for c in a.clauses)
         n["pt"] += sum(len(c.points) for c in a.clauses)
@@ -51,7 +53,7 @@ def collect(doc: dict, count_tokens) -> tuple[dict, list[int]]:
                     continue
                 n["in" if r.dst_doc_code else "out"] += 1
                 n["imp"] += not r.explicit_doc
-    return n, [c.n_tokens for c in chunks]
+    return n, [c.n_tokens for c in chunks + app]
 
 
 def main() -> int:

@@ -79,3 +79,12 @@ def test_effective_to_is_exclusive(conn):
 def test_effective_from_not_null(conn):
     with pytest.raises(psycopg.errors.NotNullViolation):
         conn.execute("insert into legal_docs(code, effective_from) values ('NULLDOC', null)")
+
+
+def test_articles_kind_column(conn):
+    ins = "insert into articles(index_version, id, doc_code, number, kind) values (1, %s, 'ND293-2025', 1, %s)"
+    conn.execute(ins, ("ND293-2025:PL1", "phu_luc"))
+    conn.execute(ins, ("ND293-2025:D1", "dieu"))
+    assert conn.execute("select kind from articles where id = 'ND293-2025:D1'").fetchone()[0] == "dieu"
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(ins, ("ND293-2025:X", "x"))

@@ -29,3 +29,12 @@ def test_parse_id_article_only_and_suffix():
 def test_parse_id_rejects_malformed(bad):
     with pytest.raises(ValueError):
         parse_id(bad)
+
+
+def test_appendix_id_roundtrip():
+    from app.legal.ids import is_appendix_id, make_appendix_id
+
+    assert make_appendix_id("ND293-2025", 1) == "ND293-2025:PL1"
+    assert make_appendix_id("ND293-2025", 1, 3) == "ND293-2025:PL1:M3"
+    assert is_appendix_id("ND293-2025:PL1:M3") and is_appendix_id("ND293-2025:PL1")
+    assert not is_appendix_id("ND293-2025:D3") and not is_appendix_id("ND293-2025:PL1:K3")

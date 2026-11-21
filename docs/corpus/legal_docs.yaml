@@ -44,6 +44,7 @@ docs:
     status: con_hieu_luc
     replaced_by: ND399-2026
     amends: []
+    keep_appendix: true
     source_url: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-293-2025-nd-cp-46568.htm
     page: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-293-2025-nd-cp-46568.htm
 

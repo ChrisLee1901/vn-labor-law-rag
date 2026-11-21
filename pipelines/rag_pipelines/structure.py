@@ -34,6 +34,9 @@ _END = re.compile(
     r"|^(?:Bộ luật|Luật) này (?:đã )?được Quốc hội nước Cộng hòa"
     r"|^(?:PHỤ LỤC|Phụ lục)(?:\s+[IVXLC\d]+)?$"
 )
+_APPENDIX = re.compile(r"^Phụ lục(?:\s+([IVX]+))?$")
+_APPENDIX_ITEM = re.compile(r"^(\d+)\. (.+)$")
+_ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
 _TITLE_MIN_WRAP = 60
 _TITLE_MAX_LINES = 5
 
@@ -61,6 +64,14 @@ class Article:
     section: str | None
     intro: str
     clauses: list[Clause] = field(default_factory=list)
+
+
+@dataclass
+class Appendix:
+    doc_code: str
+    number: int
+    title: str
+    items: list[tuple[int, str, str]]  # (số mục, tiêu đề mục, nội dung)
 
 
 class _Open:
@@ -214,3 +225,40 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
 
 def parse_document(text: str, doc_code: str) -> list[Article]:
     return parse_document_with_stats(text, doc_code)[0]
+
+
+def parse_appendices(text: str, doc_code: str) -> list[Appendix]:
+    """Phụ lục dạng danh mục đánh số `N. Tên` + các dòng `- ...` (chỉ gọi cho văn bản `keep_appendix`).
+
+    Bắt đầu từ dòng `Phụ lục [số La Mã]`; các dòng trước mục 1 là tiêu đề; mục chỉ nhận khi là số kế tiếp;
+    dòng bắt đầu bằng `-` mở dòng nội dung mới, dòng khác là phần ngắt dòng (nối bằng 1 dấu cách).
+    """
+    out: list[Appendix] = []
+    ap: Appendix | None = None
+    title: list[str] = []
+    parts: list[str] = []
+    for line in (ln.strip() for ln in text.split("\n")):
+        if not line:
+            continue
+        m = _APPENDIX.match(line)
+        if m:
+            ap, title, parts = Appendix(doc_code, _ROMAN.get(m.group(1), 1), "", []), [], []
+            out.append(ap)
+            continue
+        if ap is None:
+            continue
+        m = _APPENDIX_ITEM.match(line)
+        if m and int(m.group(1)) == len(ap.items) + 1:
+            ap.items.append((int(m.group(1)), m.group(2), ""))
+            parts = []
+        elif not ap.items:
+            title.append(line)
+            ap.title = " ".join(title)
+        else:
+            if line.startswith("-") or not parts:
+                parts.append(line)
+            else:
+                parts[-1] += " " + line
+            n, h, _ = ap.items[-1]
+            ap.items[-1] = (n, h, "\n".join(parts))
+    return out

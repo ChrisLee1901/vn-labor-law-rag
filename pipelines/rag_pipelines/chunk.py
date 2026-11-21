@@ -3,9 +3,9 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.legal.ids import make_id
+from app.legal.ids import make_appendix_id, make_id
 
-from rag_pipelines.structure import Article
+from rag_pipelines.structure import Appendix, Article, parse_appendices
 
 _SENT = re.compile(r"(?<=[.;:!?])\s+|\n")
 
@@ -93,3 +93,35 @@ def chunk_articles(articles: list[Article], doc: dict, count_tokens: Callable[[s
         for c in rest:
             do_unit(make_id(a.doc_code, a.number, c.number, suffix=a.suffix), c.number, f"{art_crumb} | Khoản {c.number}:", c.text, c.points)
     return out
+
+
+def chunk_appendices(appendices: list[Appendix], doc: dict, count_tokens: Callable[[str], int], max_tokens: int = 450) -> list[Chunk]:
+    """1 chunk/mục; quá dài thì tách theo dòng `- Vùng …`, dòng quá dài tách tiếp theo câu/từ (id `#k`), mảnh sau giữ nhãn vùng."""
+    out: list[Chunk] = []
+    for ap in appendices:
+        pid = make_appendix_id(ap.doc_code, ap.number)
+        for n, heading, text in ap.items:
+            cid = make_appendix_id(ap.doc_code, ap.number, n)
+            crumb = f"[{doc['number']} – {doc['short_title']}] Phụ lục {ap.number}. {ap.title} | {heading}:"
+            fits = lambda s: count_tokens(f"{crumb}\n{s}") <= max_tokens  # noqa: E731
+            parts = [text]
+            if not fits(text):
+                parts = []
+                for line in text.split("\n"):
+                    if fits(line):
+                        parts.append(line)
+                        continue
+                    label = (re.match(r"- Vùng [IVX]+", line) or re.match(r"", line)).group()
+                    pieces = _split(line, lambda s: fits(f"{label} (tiếp): {s}"))  # noqa: B023
+                    parts += [pieces[0]] + [f"{label} (tiếp): {p}" for p in pieces[1:]]
+            for i, p in enumerate(parts, 1):
+                embed = f"{crumb}\n{p}"
+                out.append(Chunk(cid if len(parts) == 1 else f"{cid}#{i}", pid, ap.doc_code, ap.number, n, None, p, embed, count_tokens(embed)))
+    return out
+
+
+def appendix_chunks_for(doc: dict, text: str, count_tokens: Callable[[str], int], max_tokens: int = 450) -> list[Chunk]:
+    """Chỉ văn bản có `keep_appendix: true` trong legal_docs.yaml mới sinh chunk phụ lục."""
+    if not doc.get("keep_appendix"):
+        return []
+    return chunk_appendices(parse_appendices(text, doc["code"]), doc, count_tokens, max_tokens)
