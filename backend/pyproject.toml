@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
     "langfuse>=3",
+    "psycopg-pool>=3.3.3",
 ]
 
 [dependency-groups]
