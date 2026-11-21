@@ -1,0 +1,117 @@
+# Danh mục văn bản (biên tập tay). Cột khớp bảng legal_docs; `page`/`files` chỉ dùng cho downloader.
+# file_sha256 điền từ manifest.json khi ingest.
+docs:
+  - code: BLLD
+    number: 18/VBHN-VPQH
+    title: Văn bản hợp nhất số 18/VBHN-VPQH hợp nhất Bộ luật Lao động (Bộ luật số 45/2019/QH14)
+    doc_type: vbhn
+    issuer: Văn phòng Quốc hội
+    issued_on: 2026-02-12
+    effective_from: 2021-01-01
+    effective_to: null
+    status: con_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-18-vbhn-vpqh-468971.htm
+    page: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-18-vbhn-vpqh-468971.htm
+
+  # TODO(USER): xác minh tình trạng trên vbpl.vn (tra cứu web: chỉ có dự thảo sửa đổi 2026, chưa thấy NĐ sửa đổi được ban hành)
+  - code: ND145-2020
+    number: 145/2020/NĐ-CP
+    title: Nghị định số 145/2020/NĐ-CP quy định chi tiết và hướng dẫn thi hành một số điều của Bộ luật Lao động về điều kiện lao động và quan hệ lao động
+    doc_type: nghi_dinh
+    issuer: Chính phủ
+    issued_on: 2020-12-14
+    effective_from: 2021-02-01
+    effective_to: null
+    status: con_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-145-2020-nd-cp-32732.htm
+    page: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-145-2020-nd-cp-32732.htm
+
+  - code: ND293-2025
+    number: 293/2025/NĐ-CP
+    title: Nghị định số 293/2025/NĐ-CP quy định mức lương tối thiểu đối với người lao động làm việc theo hợp đồng lao động
+    doc_type: nghi_dinh
+    issuer: Chính phủ
+    issued_on: 2025-11-10
+    effective_from: 2026-01-01
+    effective_to: 2027-01-01
+    status: con_hieu_luc
+    replaced_by: ND399-2026
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-293-2025-nd-cp-46568.htm
+    page: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-293-2025-nd-cp-46568.htm
+
+  - code: ND399-2026
+    number: 399/2026/NĐ-CP
+    title: Nghị định số 399/2026/NĐ-CP quy định mức lương tối thiểu
+    doc_type: nghi_dinh
+    issuer: Chính phủ
+    issued_on: 2026-11-02
+    effective_from: 2027-01-01
+    effective_to: null
+    status: chua_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/11/399_2026_nd-cp_02112026_6-signed.signed.pdf
+    page: null  # chưa có trang Công báo; chỉ có PDF trên datafiles
+    files:
+      - https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/11/399_2026_nd-cp_02112026_6-signed.signed.pdf
+
+  - code: LBHXH-2024
+    number: 41/2024/QH15
+    title: Luật số 41/2024/QH15 Bảo hiểm xã hội
+    doc_type: luat
+    issuer: Quốc hội
+    issued_on: 2024-06-29
+    effective_from: 2025-07-01
+    effective_to: null
+    status: con_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/luat-so-41-2024-qh15-42576.htm
+    page: https://congbao.chinhphu.vn/van-ban/luat-so-41-2024-qh15-42576.htm
+
+  - code: ND158-2025
+    number: 158/2025/NĐ-CP
+    title: Nghị định số 158/2025/NĐ-CP quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm xã hội về bảo hiểm xã hội bắt buộc
+    doc_type: nghi_dinh
+    issuer: Chính phủ
+    issued_on: 2025-06-25
+    effective_from: 2025-07-01
+    effective_to: null
+    status: con_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-158-2025-nd-cp-45240.htm
+    page: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-158-2025-nd-cp-45240.htm
+
+  - code: LVL-2025
+    number: 74/2025/QH15
+    title: Luật số 74/2025/QH15 Việc làm
+    doc_type: luat
+    issuer: Quốc hội
+    issued_on: 2025-06-16
+    effective_from: 2026-01-01
+    effective_to: null
+    status: con_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/luat-so-74-2025-qh15-45562.htm
+    page: https://congbao.chinhphu.vn/van-ban/luat-so-74-2025-qh15-45562.htm
+
+  - code: ND374-2025
+    number: 374/2025/NĐ-CP
+    title: Nghị định số 374/2025/NĐ-CP quy định chi tiết một số điều của Luật Việc làm về bảo hiểm thất nghiệp
+    doc_type: nghi_dinh
+    issuer: Chính phủ
+    issued_on: 2025-12-31
+    effective_from: 2026-01-01
+    effective_to: null
+    status: con_hieu_luc
+    replaced_by: null
+    amends: []
+    source_url: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-374-2025-nd-cp-468724.htm
+    page: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-374-2025-nd-cp-468724.htm
