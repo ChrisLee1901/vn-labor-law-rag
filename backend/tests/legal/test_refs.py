@@ -115,7 +115,7 @@ def test_enumerated_clauses_and_points():
 
 
 def test_doc_only_reference():
-    (r,) = _x("căn cứ Nghị định số 145/2020/NĐ-CP")
+    (r,) = _x("căn cứ Nghị định số 145/2020/NĐ-CP", "ND158-2025")
     assert (r.dst_doc_code, r.article) == ("ND145-2020", None)
     assert _x("Nghị định này có hiệu lực") == []
 
@@ -137,3 +137,63 @@ def test_external_names_and_numbers():
     assert _x("khoản 2 Điều 3 Luật An toàn, vệ sinh lao động.")[0].dst_doc_number == "Luật An toàn, vệ sinh lao động"
     assert _x("Điều 9 Luật Hôn nhân và gia đình")[0].dst_doc_number == "Luật Hôn nhân và gia đình"
     assert _x("Điều 9 Luật Doanh nghiệp, quy định")[0].dst_doc_number == "Luật Doanh nghiệp"
+
+
+def test_unknown_kinds_are_external_not_self_doc():
+    for s, num in [
+        ("Điều 5 Quyết định số 12/QĐ-TTg", "12/QĐ-TTg"),
+        ("Điều 5 Thông tư liên tịch số 09/2016/TTLT-BYT", "09/2016/TTLT-BYT"),
+        ("Điều 5 Thông tư số 59/2015/TT-BLĐTBXH", "59/2015/TT-BLĐTBXH"),
+    ]:
+        (r,) = _x(s, "ND145-2020")
+        assert (r.dst_doc_code, r.dst_doc_number, r.article, r.explicit_doc) == (None, num, 5, True), s
+    (r,) = _x("Điều 3 Hiến pháp", "BLLD")
+    assert (r.dst_doc_code, r.dst_doc_number, r.article) == (None, "Hiến pháp", 3)
+
+
+def test_dieu_le_attached_to_decree():
+    rs = _x("theo Điều 54 của Điều lệ bảo hiểm xã hội ban hành kèm theo Nghị định số 12/CP", "ND158-2025")
+    assert [(r.dst_doc_code, r.dst_doc_number, r.article) for r in rs] == [
+        (None, "Điều lệ bảo hiểm xã hội", 54),
+        (None, "12/CP", None),
+    ]
+
+
+def test_space_in_number_and_phu_luc_bridge():
+    rs = _x("khoản 7 Điều 15 và Phụ lục I kèm theo của Nghị định số 128/2025/ NĐ-CP", "ND293-2025")
+    assert [(r.dst_doc_code, r.dst_doc_number, r.article, r.clause) for r in rs] == [(None, "128/2025/NĐ-CP", 15, 7)]
+    assert _x("Điều 12 Nghị định số 145/2020/ NĐ-CP", None)[0].dst_doc_code == "ND145-2020"
+
+
+def test_explicit_doc_flag():
+    assert _x("theo Điều 107")[0].explicit_doc is False
+    assert extract_refs("Điều 12 quy định gì")[0].explicit_doc is False
+    assert extract_refs("Điều 5 của Luật này", "BLLD")[0].explicit_doc is True
+    assert _x("Điều 5 Luật Việc làm")[0].explicit_doc is True
+    assert _x("Điều 5 và Điều 6 Luật Việc làm")[0].explicit_doc is True
+
+
+def test_rel_window_and_article_level_only():
+    s = (
+        "Luật Việc làm số 38/2013/QH13 đã được sửa đổi, bổ sung một số điều theo Luật số 41/2024/QH15 hết hiệu lực "
+        "kể từ ngày Luật này có hiệu lực thi hành, trừ trường hợp quy định tại các khoản 1, 2 và 3 Điều 55 của Luật này."
+    )
+    assert all(r.rel == "cites" for r in _x(s, "LVL-2025"))
+    rs = _x("Luật Bảo hiểm xã hội số 41/2024/QH15 đã được sửa đổi, bổ sung một số điều theo Luật số 74/2025/QH15")
+    assert len(rs) == 2 and all(r.article is None and r.rel == "cites" for r in rs)
+    assert all(r.rel == "cites" for r in _x("Nghị định này quy định chi tiết Luật Việc làm"))
+
+
+def test_doc_only_self_mention_dropped():
+    assert _x("Nghị định số 145/2020/NĐ-CP", "ND145-2020") == []
+    assert [r.dst_doc_code for r in _x("Nghị định số 145/2020/NĐ-CP", "ND158-2025")] == ["ND145-2020"]
+
+
+def test_linear_time():
+    import time
+
+    t = " ".join(f"Điều kiện theo khoản 1 Điều {i} của Bộ luật Lao động và điểm a khoản 2 Điều {i + 1} Luật Việc làm." for i in range(450))
+    assert len(t) > 40_000
+    t0 = time.perf_counter()
+    assert len(_x(t)) >= 450
+    assert time.perf_counter() - t0 < 1.0

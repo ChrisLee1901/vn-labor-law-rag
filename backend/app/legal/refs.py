@@ -17,6 +17,7 @@ Quy ước:
   tên luật ngoài corpus cắt theo danh sách từ dừng nên có thể thiếu/thừa chữ.
 """
 import re
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Literal
 
@@ -33,6 +34,7 @@ class Ref:
     clause: int | None
     point: str | None
     rel: Rel
+    explicit_doc: bool = True  # False: văn bản đích được suy ra (Điều N trần => self_doc), không được nêu trong text
 
 
 # code -> (số hiệu chuẩn, số hiệu khác, tên)
@@ -54,14 +56,20 @@ DOC_ALIASES: dict[str, str] = {
     for k in (num, num.rsplit("/", 1)[0], *more, *names)
 }
 
-_NUM = r"\d+/(?:\d{4}(?:/[^\W\d_][\w-]*)?|[^\W\d_][\w-]+)"
-_KIND = re.compile(r"(?i:bộ luật|luật|nghị định|nđ|thông tư|nghị quyết|pháp lệnh)\b")
+_NUM = r"\d+/(?:\d{4}(?:/\s?[^\W\d_][\w-]*)?|[^\W\d_][\w-]+)"  # chấp nhận "128/2025/ NĐ-CP"
+_KIND = re.compile(
+    r"(?i:thông tư liên tịch|thông tư|bộ luật|luật|nghị định|nđ|nghị quyết|pháp lệnh|quyết định|hiến pháp|điều lệ|công ước|lệnh)\b"
+)
 _THIS = re.compile(r"\s+(?i:này)\b")
 _NUMREF = re.compile(rf"\s+(?:(?i:số)\s+)?({_NUM})")
 _YEAR = re.compile(r"\s+(?i:năm)\s+(\d{4})\b")
 _WORD = re.compile(r"\s+([^\W\d_]+)")
-_TO_DOC = re.compile(r"\s+(?:(?i:của|trong)\s+)?")
-_NAMED_KINDS = {"luật", "bộ luật", "pháp lệnh"}  # loại khác bắt buộc có số hiệu
+# Cầu nối trước tên văn bản: "của", "Phụ lục I kèm theo của", "kèm theo".
+_TO_DOC = re.compile(
+    r"\s+(?:(?:(?i:và)\s+)?(?i:phụ lục)(?:\s+[IVXLC\d]+)?\s+)?(?:(?i:kèm theo)\s+)?(?:(?i:của|trong)\s+)?"
+)
+_NAMED_KINDS = {"luật", "bộ luật", "pháp lệnh", "điều lệ"}  # có tên không số; các loại khác (kể cả ngoài corpus) bắt buộc có số hiệu
+_WINDOW = 80  # từ khóa rel phải nằm trong ngần này ký tự trước tham chiếu
 # Tên ngoài corpus có dấu phẩy/"và" (danh sách từ dừng không cắt đúng được).
 _EXT_NAMES = ("luật an toàn, vệ sinh lao động", "luật hôn nhân và gia đình", "luật thi đua, khen thưởng")
 _STOP = frozenset(
@@ -85,6 +93,7 @@ _AMENDS = re.compile(r"sửa đổi,? bổ sung", re.I)
 
 
 def _by_number(num: str, aliases: dict[str, str]) -> tuple[str | None, str]:
+    num = re.sub(r"\s+", "", num)
     code = aliases.get(num.lower())
     return (code, DOC_NUMBERS.get(code, num)) if code else (None, num)
 
@@ -114,11 +123,14 @@ def _doc_at(text: str, low: str, pos: int, aliases: dict[str, str], self_doc: st
     for name in _EXT_NAMES:
         if low.startswith(name, pos):
             return pos + len(name), None, text[pos : pos + len(name)], False, False
-    if k.group().lower() in _NAMED_KINDS and k.group()[0].isupper():  # tên ngoài corpus: "Luật Bảo hiểm y tế"
+    kind = k.group().lower()
+    if kind == "hiến pháp":
+        return k.end(), None, text[pos : k.end()], False, False
+    if kind in _NAMED_KINDS and (k.group()[0].isupper() or kind == "điều lệ"):  # tên ngoài corpus: "Luật Bảo hiểm y tế"
         end, words = k.end(), 0
         while (w := _WORD.match(text, end)) and words < 8:
             word = w.group(1)
-            if word.lower() in _STOP or (words == 0 and not word[0].isupper()):
+            if word.lower() in _STOP or (words == 0 and not word[0].isupper() and kind != "điều lệ"):
                 break
             end, words = w.end(), words + 1
         if words:
@@ -135,23 +147,31 @@ def _expand(u: dict) -> list[tuple[int, int | None, str | None]]:
     return [(int(a), c, p) for a in split(u["arts"]) if a.isdigit() for c in cls for p in pts]
 
 
-def _rel(text: str, start: int, end: int) -> Rel:
-    ends = [m.end() for m in _SENT_END.finditer(text, 0, start)]
-    lo = ends[-1] if ends else 0
-    m = _SENT_END.search(text, end)
-    hi = m.start() if m else len(text)
-    kw = sorted(
-        [(m.start(), m.end(), "details") for m in _DETAILS.finditer(text, lo, hi)]
-        + [(m.start(), m.end(), "amends") for m in _AMENDS.finditer(text, lo, hi)]
-    )
-    before = [k for k in kw if k[1] <= start]
-    pick = before[-1] if before else next((k for k in kw if k[0] >= end), None)
-    return pick[2] if pick else "cites"
+class _RelIndex:
+    """Ranh giới câu và từ khóa tính một lần cho cả text => mỗi tra cứu O(log n)."""
+
+    def __init__(self, text: str):
+        self.ends = [m.end() for m in _SENT_END.finditer(text)]
+        self.kw = sorted(
+            [(m.start(), m.end(), "details") for m in _DETAILS.finditer(text)]
+            + [(m.start(), m.end(), "amends") for m in _AMENDS.finditer(text)]
+        )
+        self.kw_ends = [k[1] for k in self.kw]
+
+    def rel(self, start: int) -> Rel:
+        """Từ khóa gần nhất đứng trước `start`, cùng câu, trong _WINDOW ký tự; không có => cites."""
+        i = bisect_right(self.ends, start)
+        lo = self.ends[i - 1] if i else 0
+        i = bisect_right(self.kw_ends, start) - 1
+        if i >= 0 and self.kw[i][0] >= lo and start - self.kw_ends[i] <= _WINDOW:
+            return self.kw[i][2]
+        return "cites"
 
 
 def extract_refs(text: str, self_doc: str | None = None, aliases: dict[str, str] = DOC_ALIASES) -> list[Ref]:
     text = nfc(text)
     low = text.lower()
+    rels = _RelIndex(text)
     units: list[dict] = []
     doc_spans: list[tuple[int, int]] = []
     pos = 0
@@ -180,16 +200,17 @@ def extract_refs(text: str, self_doc: str | None = None, aliases: dict[str, str]
     for u in units:
         if u["this"] or not u["arts"]:
             continue
-        _, code, number, *_ = u["doc"] or (0, self_doc, DOC_NUMBERS.get(self_doc, ""))
-        rel = _rel(text, u["start"], u["end"])
-        out += [(u["start"], Ref(code, number, a, c, p, rel)) for a, c, p in _expand(u)]
+        _, code, number, is_self, _ = u["doc"] or (0, self_doc, DOC_NUMBERS.get(self_doc, ""), True, False)
+        explicit = bool(u["doc"]) and not (is_self and self_doc is None)
+        rel = rels.rel(u["start"])
+        out += [(u["start"], Ref(code, number, a, c, p, rel, explicit)) for a, c, p in _expand(u)]
 
     for k in _KIND.finditer(text):  # tham chiếu chỉ nêu văn bản
         if any(s <= k.start() < e for s, e in doc_spans) or (k.start() and text[k.start() - 1].isalnum()):
             continue
         d = _doc_at(text, low, k.start(), aliases, self_doc)
-        if d and not d[3] and (d[1] or d[4]):
-            out.append((k.start(), Ref(d[1], d[2], None, None, None, _rel(text, k.start(), d[0]))))
+        if d and not d[3] and (d[1] or d[4]) and (d[1] is None or d[1] != self_doc):
+            out.append((k.start(), Ref(d[1], d[2], None, None, None, "cites")))
 
     refs: dict[Ref, None] = {}
     for _, r in sorted(out, key=lambda x: x[0]):
