@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 
 import yaml
@@ -15,6 +16,13 @@ UA = "real-rag-corpus-fetcher/0.1"
 DELAY = 1.5
 _HREF = re.compile(r'href="([^"]+)"')
 _last = 0.0
+_SIG = {"pdf": b"%PDF", "docx": b"PK\x03\x04", "doc": b"\xd0\xcf\x11\xe0"}
+_HOSTS = (".chinhphu.vn", ".cdnchinhphu.vn")  # trang Công báo là dữ liệu không tin cậy
+
+
+def _trusted(url: str) -> bool:
+    host = urlparse(url).hostname or ""
+    return host.endswith(_HOSTS)
 
 
 def parse_file_links(page_html: str) -> list[str]:
@@ -22,6 +30,8 @@ def parse_file_links(page_html: str) -> list[str]:
     out: dict[str, list[str]] = {"docx": [], "doc": [], "pdf": []}
     for raw in _HREF.findall(page_html):
         url = html.unescape(raw)
+        if not _trusted(url):
+            continue
         low = url.lower()
         if "download/stream" in low and "file_name=" in low:
             ext = low.rsplit(".", 1)[-1]
@@ -62,8 +72,13 @@ def run(docs_path: Path, out_dir: Path, manifest_path: Path) -> list[dict]:
         code = doc["code"]
         (out_dir / code).mkdir(parents=True, exist_ok=True)
         part: dict[str, int] = {}
-        for url in _file_urls(doc):
+        urls = _file_urls(doc)
+        if not urls:
+            raise RuntimeError(f"{code}: không tìm thấy link tải")
+        for url in urls:
             ext = url.lower().rsplit(".", 1)[-1]
+            if ext not in _SIG:
+                raise ValueError(f"{code}: phần mở rộng không hỗ trợ '.{ext}' ({url})")
             part[ext] = part.get(ext, 0) + 1
             name = f"{code}.part{part[ext]}.{ext}"
             path = out_dir / code / name
