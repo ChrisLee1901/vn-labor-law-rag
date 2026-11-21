@@ -220,7 +220,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 - [ ] Test hỏng:
   - `test_strip_congbao_headers`: input có dòng `CÔNG BÁO/Số 1203 + 1204/Ngày 26-12-2020` và số trang lẻ. Output không còn các dòng đó.
   - `test_extract_is_nfc`: chuỗi dựng sẵn ở NFD → output `== unicodedata.normalize('NFC', …)`.
-  - `test_extract_nd145_joins_two_parts`: text ND145 chứa cả "Điều 1." lẫn "Điều 125.".
+  - `test_extract_nd145_joins_two_parts`: text ND145 chứa cả "Điều 1." lẫn "Điều 115.".
 - [ ] Viết `extract.py`. DOCX dùng python-docx (đoạn văn + bảng, giữ thứ tự). PDF dùng `pymupdf`.
 - [ ] Test PASS. Commit `feat(pipelines): text extraction with Công báo header stripping`.
 
@@ -234,7 +234,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 - Quy tắc: Chương `^Chương [IVXLC]+`, Mục `^Mục \d+`, Điều `^Điều (\d+)([a-z]?)\. (.*)`, Khoản `^(\d+)\. `, Điểm `^([a-zđ])\) `. Phần "Phụ lục" và mẫu biểu sau điều cuối bị **bỏ** (ghi số ký tự bị bỏ vào stats). Văn bản sửa đổi có "Điều 1." lồng trong dấu ngoặc kép không được tách thành Điều mới.
 
 - [ ] Test hỏng (dùng text thật qua `extract_text`):
-  - `test_article_counts`: `{"BLLD": 220, "LBHXH-2024": 141, "LVL-2025": 55, "ND145-2020": 125}`, mỗi văn bản `len(articles) == n` và các số Điều liên tục từ 1.
+  - `test_article_counts`: `{"BLLD": 220, "LBHXH-2024": 141, "LVL-2025": 55, "ND145-2020": 115}`, mỗi văn bản `len(articles) == n` và các số Điều liên tục từ 1.
   - `test_clause_and_point_parsing`: có ít nhất 1 Điều của BLLD với `clauses[0].points[0].letter == "a"`.
   - `test_make_parse_id_roundtrip`: `parse_id(make_id("ND145-2020", 12, 2, "a")) == ("ND145-2020", 12, 2, "a")`.
 - [ ] Viết code. Chạy `uv run pytest pipelines/tests/test_structure.py backend/tests/legal -v`. Mong đợi: PASS. Nếu số Điều lệch, in ra số bị thiếu hoặc trùng rồi sửa regex. **Không sửa con số trong test**: số đó lấy từ văn bản thật.
