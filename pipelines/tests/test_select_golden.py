@@ -4,6 +4,7 @@ from rag_pipelines.eval.golden_schema import QUOTA
 from rag_pipelines.eval.select_golden import main, select
 
 IDS = {"X:D1", "X:D2"}
+NL = chr(10)
 NO_GOLD = {"unanswerable", "out_of_domain", "injection"}
 
 
@@ -58,3 +59,28 @@ def test_shortfall_and_cli_exit(tmp_path):
     rc = main(["--candidates", str(d / "c.jsonl"), "--verification", str(d / "v.jsonl"), "--out", str(d / "v1.jsonl"),
                "--sample", str(d / "s.csv"), "--stats", str(d / "stats.json")], ids=IDS)
     assert rc != 0 and (d / "stats.json").exists() and not (d / "v1.jsonl").exists()
+
+
+def test_nfc_and_duplicate_questions():
+    import unicodedata
+    cands, vers = build()
+    nfd = unicodedata.normalize("NFD", "Hợp đồng lao động")
+    cands[0]["question"] = nfd
+    cands[1]["question"] = "  " + unicodedata.normalize("NFC", nfd)  # same question after NFC/strip
+    items, stats, _ = select(cands, vers, IDS)
+    assert stats["single"]["duplicate"] == 1
+    assert all(unicodedata.is_normalized("NFC", i.question) for i in items)
+    assert sum(i.question == "Hợp đồng lao động" for i in items) == 1
+
+
+def test_cli_refuses_to_write_invalid_set(tmp_path, monkeypatch):
+    cands, vers = build()
+    d = tmp_path
+    (d / "c.jsonl").write_text(NL.join(json.dumps(c) for c in cands), encoding="utf-8")
+    (d / "v.jsonl").write_text(NL.join(json.dumps(v) for v in vers), encoding="utf-8")
+    args = ["--candidates", str(d / "c.jsonl"), "--verification", str(d / "v.jsonl"), "--out", str(d / "v1.jsonl"),
+            "--sample", str(d / "s.csv"), "--stats", str(d / "stats.json")]
+    assert main(args, ids=IDS) == 0 and (d / "v1.jsonl").exists()  # valid set is written
+    (d / "v1.jsonl").unlink()
+    monkeypatch.setattr("rag_pipelines.eval.select_golden.validate_set", lambda items, ids=None: ["boom"])
+    assert main(args, ids=IDS) != 0 and not (d / "v1.jsonl").exists()

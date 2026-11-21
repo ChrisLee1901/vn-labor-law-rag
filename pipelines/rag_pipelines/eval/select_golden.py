@@ -5,11 +5,12 @@ import csv
 import json
 import random
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import asdict
 from pathlib import Path
 
-from rag_pipelines.eval.golden_schema import MAX_JACCARD, NO_GOLD, QUOTA, ROOT, TYPES, GoldItem, syllable_jaccard, valid_ids
+from rag_pipelines.eval.golden_schema import MAX_JACCARD, NO_GOLD, QUOTA, ROOT, TYPES, GoldItem, syllable_jaccard, valid_ids, validate_set
 
 SEED = 42
 WORK = ROOT / "eval/golden/_work"
@@ -17,6 +18,11 @@ WORK = ROOT / "eval/golden/_work"
 
 def _jsonl(path) -> list[dict]:
     return [json.loads(ln) for ln in Path(path).read_text(encoding="utf-8").splitlines() if ln.strip()]
+
+
+def _nfc(c: dict) -> dict:
+    nfc = lambda s: unicodedata.normalize("NFC", s).strip()  # noqa: E731
+    return {**c, **{k: nfc(c[k]) for k in ("question", "answer", "source_quote")}, "gold": [nfc(g) for g in c["gold"]]}
 
 
 def _reject(c: dict, v: dict | None, ids) -> str | None:
@@ -37,12 +43,18 @@ def _reject(c: dict, v: dict | None, ids) -> str | None:
 def select(cands: list[dict], verif: list[dict], ids) -> tuple[list[GoldItem], dict, dict]:
     """=> (items, thống kê loại theo type, thiếu theo type)."""
     ver = {v["cand_index"]: v for v in verif}
+    cands = [_nfc(c) for c in cands]
+    seen: set[str] = set()
     stats: dict[str, Counter] = {t: Counter() for t in TYPES}
     kept: dict[str, list[dict]] = defaultdict(list)
     for i, c in enumerate(cands):
         s = stats[c["type"]]
         s["total"] += 1
         why = _reject(c, ver.get(i), ids) or ("copy" if syllable_jaccard(c["question"], c["source_quote"]) > MAX_JACCARD else None)
+        if not why and c["question"] in seen:
+            why = "duplicate"
+        if not why:
+            seen.add(c["question"])
         if why:
             s[why] += 1
         else:
@@ -79,6 +91,9 @@ def main(argv=None, ids=None) -> int:
         print(f"{t}: {s}")
     if short:
         print(f"SHORTFALL (need more kept candidates): {short}", file=sys.stderr)
+        return 1
+    if errs := validate_set(items, valid_ids() if ids is None else ids):
+        print("INVALID SET, not written:", *errs, sep="\n", file=sys.stderr)
         return 1
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text("".join(json.dumps(asdict(i), ensure_ascii=False) + "\n" for i in items), encoding="utf-8")

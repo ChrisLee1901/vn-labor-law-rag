@@ -51,7 +51,7 @@ def test_split_counts_and_stratification():
     assert any("split" in e for e in errs(items))
     items = make_set()
     singles = [i for i in items if i.type == "single"]
-    for i in singles[:14]:  # keep dev total at 40 but skew it: single all-test, numeric all-dev
+    for i in singles[:14]:  # skew the per-type dev share: single loses 14 dev, numeric gains 14 dev
         i.split = "test"
     for i in [i for i in items if i.type == "numeric"][6:20]:
         i.split = "dev"
