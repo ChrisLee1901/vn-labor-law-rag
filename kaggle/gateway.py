@@ -2,16 +2,18 @@
 import hmac
 import math
 import os
+import threading
 from contextlib import asynccontextmanager
 from typing import Annotated, Protocol
 
+import anyio
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, StringConstraints
-from starlette.background import BackgroundTask
 
 MAX_ITEMS = 64
+MAX_BODY = 1_000_000
 Text = Annotated[str, StringConstraints(max_length=8000)]
 BATCH = 32
 
@@ -46,6 +48,8 @@ def create_app(
     api_key: str,
     model_name: str = "",
 ) -> FastAPI:
+    if not api_key:
+        raise ValueError("api_key must not be empty")
     client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=5.0))
 
     @asynccontextmanager
@@ -53,12 +57,40 @@ def create_app(
         yield
         await client.aclose()
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     llm_url = llm_url.rstrip("/")
+    expected = f"Bearer {api_key}".encode()
+    emb_lock, rer_lock = threading.Lock(), threading.Lock()
 
-    def auth(authorization: str = Header(default="")) -> None:
-        if not hmac.compare_digest(authorization.encode(), f"Bearer {api_key}".encode()):
-            raise HTTPException(status_code=401, detail="unauthorized")
+    class GuardMiddleware:
+        """Pure ASGI: auth before any body is read, then cap body size."""
+
+        def __init__(self, inner):
+            self.inner = inner
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http" or scope["path"] == "/health":
+                return await self.inner(scope, receive, send)
+            got = dict(scope["headers"]).get(b"authorization", b"")
+            if not hmac.compare_digest(got, expected):
+                return await JSONResponse({"detail": "unauthorized"}, status_code=401)(scope, receive, send)
+            declared = dict(scope["headers"]).get(b"content-length", b"0")
+            if declared.isdigit() and int(declared) > MAX_BODY:
+                return await JSONResponse({"detail": "body too large"}, status_code=413)(scope, receive, send)
+            seen = 0
+
+            async def capped():
+                nonlocal seen
+                msg = await receive()
+                if msg["type"] == "http.request":
+                    seen += len(msg.get("body", b""))
+                    if seen > MAX_BODY:
+                        raise HTTPException(status_code=413, detail="body too large")
+                return msg
+
+            await self.inner(scope, capped, send)
+
+    app.add_middleware(GuardMiddleware)
 
     @app.get("/health")
     async def health():
@@ -76,14 +108,20 @@ def create_app(
             "model": model_name,
         }
 
-    @app.post("/v1/embeddings", dependencies=[Depends(auth)])
+    @app.post("/v1/embeddings")
     def embeddings(req: EmbedReq):
-        vecs = embedder.encode(req.input)
+        if embedder is None:
+            raise HTTPException(status_code=503, detail="embedder unavailable")
+        with emb_lock:
+            vecs = embedder.encode(req.input)
         return {"data": [{"index": i, "embedding": v} for i, v in enumerate(vecs)]}
 
-    @app.post("/v1/rerank", dependencies=[Depends(auth)])
+    @app.post("/v1/rerank")
     def rerank(req: RerankReq):
-        logits = reranker.predict([(req.query, d) for d in req.documents])
+        if reranker is None:
+            raise HTTPException(status_code=503, detail="reranker unavailable")
+        with rer_lock:
+            logits = reranker.predict([(req.query, d) for d in req.documents])
         scored = sorted(
             ({"index": i, "relevance_score": _sigmoid(float(s))} for i, s in enumerate(logits)),
             key=lambda x: x["relevance_score"],
@@ -91,22 +129,36 @@ def create_app(
         )
         return {"results": scored[: req.top_n or len(scored)]}
 
-    @app.post("/v1/chat/completions", dependencies=[Depends(auth)])
+    @app.post("/v1/chat/completions")
     async def chat(body: dict):
         url = f"{llm_url}/v1/chat/completions"
         try:
             if body.get("stream"):
                 up = await client.send(client.build_request("POST", url, json=body), stream=True)
-                return StreamingResponse(
-                    up.aiter_raw(),
-                    status_code=up.status_code,
-                    media_type="text/event-stream",
-                    background=BackgroundTask(up.aclose),
-                )
+
+                async def chunks():
+                    try:
+                        async for c in up.aiter_bytes():
+                            yield c
+                    finally:  # also runs on client disconnect (cancellation)
+                        with anyio.CancelScope(shield=True):
+                            await up.aclose()
+
+                try:
+                    return StreamingResponse(
+                        chunks(), status_code=up.status_code, media_type="text/event-stream"
+                    )
+                except BaseException:
+                    await up.aclose()
+                    raise
             up = await client.post(url, json=body)
         except httpx.HTTPError:
             return JSONResponse({"detail": "llm unavailable"}, status_code=503)
-        return JSONResponse(up.json(), status_code=up.status_code)
+        try:
+            data = up.json()
+        except ValueError:
+            return JSONResponse({"detail": "llm bad response"}, status_code=502)
+        return JSONResponse(data, status_code=up.status_code)
 
     return app
 
