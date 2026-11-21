@@ -7,7 +7,7 @@ create table legal_docs (
   doc_type text check (doc_type in ('luat','bo_luat','vbhn','nghi_dinh','thong_tu')),
   issuer text,
   issued_on date,
-  effective_from date,
+  effective_from date not null,
   effective_to date,
   status text,
   replaced_by text references legal_docs(code),

@@ -1,5 +1,7 @@
 import random
 
+import psycopg
+
 import pytest
 
 
@@ -50,3 +52,30 @@ def test_hybrid_search_fts_only_when_embedding_null(conn):
 
 def test_fts_noaccent_matches_unaccented_query(conn):
     assert ids(conn, "2026-06-01", None, q="", qn="luong & toi & thieu") == ["ND293-2025:D3:K1"]
+
+
+def scores(conn, as_of, qe, q=Q, qn=QN):
+    return [
+        r[0]
+        for r in conn.execute(
+            "select score from hybrid_search(%s, %s, %s::halfvec, 1, %s::date)", (q, qn, qe, as_of)
+        ).fetchall()
+    ]
+
+
+def test_rrf_scores(conn):
+    assert scores(conn, "2026-06-01", emb(0)) == [pytest.approx(2 / 51)]
+    assert scores(conn, "2026-06-01", None) == [pytest.approx(1 / 51)]
+
+
+def test_semantic_branch_alone_with_blank_queries(conn):
+    assert ids(conn, "2026-06-01", emb(0), q="", qn="") == ["ND293-2025:D3:K1"]
+
+
+def test_effective_to_is_exclusive(conn):
+    assert ids(conn, "2027-01-01", emb(0)) == ["ND399-2026:D3:K1"]
+
+
+def test_effective_from_not_null(conn):
+    with pytest.raises(psycopg.errors.NotNullViolation):
+        conn.execute("insert into legal_docs(code, effective_from) values ('NULLDOC', null)")
