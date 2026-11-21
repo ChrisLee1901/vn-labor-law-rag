@@ -19,6 +19,7 @@ def _corpus_dir() -> Path:
 
 
 _CONGBAO = re.compile(r"^\s*CÔNG\s*BÁO\s*/\s*Số\s*[\d\s+,.\-]+/\s*Ngày\s*[\d\s\-./]+$", re.I)
+_CONTINUED = re.compile(r"^\s*\(\s*(Xem\s+)?tiếp\s+theo\s+Công\s+báo\s+số\b[^)]*\)\s*$", re.I)
 _PAGENO = re.compile(r"^\s*\d{1,4}\s*$")
 # Con dấu chữ ký số của PDF Công báo: khối bắt đầu bằng "Ký bởi:"/"Người ký:" rồi các dòng thuộc tính.
 _SIG_START = re.compile(r"^\s*(Ký bởi|Người ký)\s*:", re.I)
@@ -28,14 +29,14 @@ _SIG_FIELD = re.compile(r"^\s*(Email|Cơ quan|Thời gian ký|Ngày ký)\s*:", r
 def strip_congbao_headers(text: str, page_numbers: bool = True) -> str:
     """Bỏ header Công báo, khối chữ ký số và (tùy chọn) dòng chỉ gồm số trang. Không đụng thân văn bản."""
     out, in_sig = [], False
-    for line in text.split("\n"):
+    for line in unicodedata.normalize("NFC", text).split("\n"):  # NFC trước để regex khớp cả đầu vào NFD
         if _SIG_START.match(line):
             in_sig = True
             continue
         if _SIG_FIELD.match(line) and (in_sig or line.lstrip().lower().startswith(("thời gian ký", "ngày ký"))):
             continue
         in_sig = False
-        if _CONGBAO.match(line) or (page_numbers and _PAGENO.match(line)):
+        if _CONGBAO.match(line) or _CONTINUED.match(line) or (page_numbers and _PAGENO.match(line)):
             continue
         out.append(line.rstrip())
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
