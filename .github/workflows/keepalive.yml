@@ -35,5 +35,15 @@ jobs:
             echo "::error::Thiếu biến repository PROD_URL hoặc secret CRON_SECRET: keep-alive không chạy được, Supabase sẽ bị pause sau 7 ngày. Xem docs/deploy.md."
             exit 1
           fi
-          curl -fsS --max-time 30 --retry 3 --retry-delay 10 \
-            -H "Authorization: Bearer $CRON_SECRET" "${PROD_URL%/}/api/cron/keepalive"
+          case "$PROD_URL" in
+            https://*) ;;
+            *) echo "::error::PROD_URL phải bắt đầu bằng https:// (bearer token không được gửi qua http, redirect cũng bị coi là lỗi). Xem docs/deploy.md."; exit 1 ;;
+          esac
+          # không có -f/-L: redirect hay 2xx khác 204 phải đỏ, không được theo redirect kèm bearer
+          code=$(curl -sS --max-time 30 --retry 3 --retry-delay 10 --proto '=https' \
+            -H "Authorization: Bearer $CRON_SECRET" -o /dev/null -w '%{http_code}' \
+            "${PROD_URL%/}/api/cron/keepalive") || {
+            echo "::error::Không gọi được /api/cron/keepalive (lỗi kết nối, xem dòng curl ở trên)."
+            exit 1
+          }
+          [ "$code" = 204 ] || { echo "::error::keep-alive got HTTP $code (expected 204)"; exit 1; }
