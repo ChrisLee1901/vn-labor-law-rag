@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EffectivenessBadge } from "@/components/effectiveness-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   articleFor,
@@ -11,16 +12,9 @@ import {
   parseSourceUrl,
   type Effectiveness,
 } from "@/lib/docs-cache";
-import { cn } from "@/lib/utils";
-
-const TONE: Record<Effectiveness["tone"], string> = {
-  active: "bg-status-online text-status-online-foreground",
-  future: "bg-status-offline text-status-offline-foreground",
-  expired: "bg-status-down text-status-down-foreground",
-};
 
 /** Badge hiệu lực của văn bản chứa nguồn; không hiện gì nếu chưa tra được. */
-export function EffectivenessBadge({ url, className }: { url: string; className?: string }) {
+export function SourceEffectiveness({ url, className }: { url: string; className?: string }) {
   const code = parseSourceUrl(url)?.code;
   const [eff, setEff] = useState<Effectiveness | null>(null);
 
@@ -38,15 +32,7 @@ export function EffectivenessBadge({ url, className }: { url: string; className?
     };
   }, [code]);
 
-  if (!eff) return null;
-  return (
-    <span
-      title={eff.tooltip}
-      className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", TONE[eff.tone], className)}
-    >
-      {eff.label}
-    </span>
-  );
+  return eff ? <EffectivenessBadge eff={eff} className={className} /> : null;
 }
 
 /** Trích ~300 ký tự đầu của điều luật, tải khi cần. Đang tải: skeleton; lỗi hoặc không thấy: không hiện gì. */

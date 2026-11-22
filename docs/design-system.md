@@ -73,6 +73,14 @@ Tiêu đề luôn đứng thẳng (không italic).
 - Bố cục: ≥ lg hai cột (câu trả lời, panel nguồn 18rem dính khi cuộn); dưới lg panel là sheet đáy mở bằng "Nguồn (n)" hoặc bấm `[S#]`. Ô nhập dính đáy trang.
 - Thông báo cho trình đọc màn hình: vùng `role=status` chỉ đọc "Đã có câu trả lời mới." khi stream xong, nội dung đang stream không nằm trong vùng live (`aria-busy` trên danh sách).
 
+## Trang Văn bản (Task 5.3)
+
+- Danh sách: lưới 1 cột, `sm` trở lên 2 cột; mỗi văn bản là thẻ `rounded-md border bg-card` (không đổ bóng, không bo lớn): số hiệu (chữ phụ), tên là liên kết (`h2`), hàng meta gồm huy hiệu hiệu lực, loại, ngày hiệu lực, số Điều. Thứ tự: đang hiệu lực, chưa hiệu lực, hết hiệu lực; trong nhóm theo ngày hiệu lực mới nhất. `DocSummary` không có cơ quan/ngày ban hành nên thẻ không hiện hai trường này (có ở trang chi tiết).
+- `EffectivenessBadge` (`src/components/effectiveness-badge.tsx`) dùng chung với chat; bộ `status-*` như mục Hỏi đáp.
+- Chi tiết: đầu trang có liên kết quay lại, số hiệu, tên (`h1`), huy hiệu, "Được thay thế bởi {số hiệu}" (liên kết), meta `dl`, liên kết nguồn ngoài (chỉ http/https, `rel="noopener noreferrer"`). Thân bài ≥ lg hai cột: mục lục `16rem` dính (`sticky top-4`, cuộn riêng) và nội dung; dưới lg mục lục là `<details>` "Mục lục". Chương là `h2`, Điều là `h3` có `id` `D{n}` (Điều 12a: `D12a`), phụ lục `PL{n}`.
+- Điều được trỏ tới (`:target`): viền trái 2 px và gạch chân tiêu đề bằng `cite-foreground`; thêm nền `cite` trong 3 giây (`data-active`, do `HashHighlight` đặt, kèm cuộn mượt, tắt khi `prefers-reduced-motion`). Nội dung điều là chữ trần `white-space: pre-line`, không markdown/HTML. `content-visibility: auto` trên từng Điều để văn bản dài (BLLĐ 220 Điều) không nặng.
+- Render: cả hai trang `force-dynamic` (không gọi API lúc build, không đóng băng thẻ lỗi vào trang tĩnh); dữ liệu vẫn cache 1 giờ qua `fetch(..., { next: { revalidate: 3600 } })`. Gốc API phía server: `getApiBase()` trong `src/lib/api-server.ts`.
+
 ## Dependencies
 
 - `cn` (npm, 0.5.2) thay cho `clsx` + `tailwind-merge`: giữ nguyên, vì đây là mặc định hiện tại của template shadcn. Đã kiểm tra chuỗi cung ứng: maintainer `shadcn`, repo `github.com/shadcn-ui/cn`, giấy phép MIT, không có script postinstall. Mã ứng dụng import `cn` từ `@/lib/utils` (file này re-export từ `"cn"`); các file sinh sẵn trong `components/ui/*` được phép import `"cn"` trực tiếp, không sửa tay.
@@ -84,5 +92,6 @@ Tiêu đề luôn đứng thẳng (không italic).
 ## Biến môi trường
 
 - `API_ORIGIN`: đích rewrite `/api/*`. Khi chạy `next dev` mặc định `http://127.0.0.1:8000`. Ở production không đặt thì không có rewrite (`vercel.json`, Task 6.3, định tuyến). Logic ở `src/lib/api-rewrites.ts`.
+- Gọi API từ server component (`/van-ban*`): `API_ORIGIN` -> `NEXT_PUBLIC_SITE_URL` -> `https://$VERCEL_URL` -> `http://127.0.0.1:8000` (chỉ `NODE_ENV=development`) -> lỗi rõ ràng.
 - `NEXT_PUBLIC_MOCK_CHAT=1`: trang chat gọi `/api/mock/chat` (route dev, 404 khi `NODE_ENV=production`) thay cho `/api/chat`. Inlined lúc build.
 - `NEXT_PUBLIC_REPO_URL`: liên kết GitHub ở footer, ẩn khi không đặt.

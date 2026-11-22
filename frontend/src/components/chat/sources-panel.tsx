@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import type { SourceItem } from "@/lib/chat-types";
 import { isSafeSourceUrl } from "@/lib/docs-cache";
 import { cn, focusRing } from "@/lib/utils";
-import { EffectivenessBadge } from "./source-info";
+import { SourceEffectiveness } from "./source-info";
 
 /** Danh sách S1..Sn của câu trả lời đang chọn; mục đang xem có gạch chân màu cite. */
 export function SourcesPanel({ sources, activeId }: { sources: SourceItem[]; activeId?: string }) {
@@ -36,7 +36,7 @@ export function SourcesPanel({ sources, activeId }: { sources: SourceItem[]; act
                 {s.title}
               </span>
             </p>
-            <EffectivenessBadge url={s.url} />
+            <SourceEffectiveness url={s.url} />
             {isSafeSourceUrl(s.url) && (
               <div>
                 <Link href={s.url} className={cn("font-medium text-primary underline underline-offset-4", focusRing)}>

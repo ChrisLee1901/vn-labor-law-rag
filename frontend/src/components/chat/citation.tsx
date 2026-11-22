@@ -6,7 +6,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import type { SourceItem } from "@/lib/chat-types";
 import { isSafeSourceUrl } from "@/lib/docs-cache";
 import { cn, focusRing } from "@/lib/utils";
-import { EffectivenessBadge, SourceExcerpt } from "./source-info";
+import { SourceEffectiveness, SourceExcerpt } from "./source-info";
 
 export interface CitationContextValue {
   sources: SourceItem[];
@@ -39,7 +39,7 @@ export function Citation({ id }: { id: string }) {
       </HoverCardTrigger>
       <HoverCardContent className="w-80 max-w-[calc(100vw-2rem)] space-y-2">
         <p className="font-medium leading-snug">{source.title}</p>
-        <EffectivenessBadge url={source.url} />
+        <SourceEffectiveness url={source.url} />
         <SourceExcerpt url={source.url} />
         {isSafeSourceUrl(source.url) && (
           <Link href={source.url} className={cn("inline-block text-sm font-medium text-primary underline underline-offset-4", focusRing)}>
