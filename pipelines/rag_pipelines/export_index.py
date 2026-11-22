@@ -28,10 +28,19 @@ def _table(cur: psycopg.Cursor) -> pa.Table:
 
 def export(db_url: str, version: int, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    with psycopg.connect(db_url) as conn, conn.cursor() as cur:
+    with psycopg.connect(db_url) as conn:
+        conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ  # one snapshot for all four reads
+        conn.read_only = True
+        _export(conn, version, out)
+
+
+def _export(conn: psycopg.Connection, version: int, out: Path) -> None:
+    with conn.cursor() as cur:
         cur.execute(f"select {CHUNK_COLS}, embedding::text from chunks where index_version = %s order by id", (version,))
         names = [d.name for d in cur.description][:-1]
         rows = cur.fetchall()
+        if not rows:
+            raise ValueError(f"index_version {version} has no chunks; nothing to export")
         cols = {n: [r[i] for r in rows] for i, n in enumerate(names)}
         cols["embedding"] = pa.array([np.array(r[-1].strip("[]").split(","), dtype=np.float16) for r in rows], type=pa.list_(pa.float16()))
         pq.write_table(pa.table(cols), out / f"v{version}.parquet")

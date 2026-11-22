@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ import yaml
 from app.legal.ids import make_appendix_id, make_id
 from app.legal.normalize import strip_diacritics
 from app.legal.refs import DOC_NUMBERS, extract_refs
+from app.llm.gateway import Gateway, LLMOffline
 
 from rag_pipelines.chunk import Chunk, chunk_articles, chunk_appendices, default_count_tokens
 from rag_pipelines.extract import extract_text
@@ -137,10 +139,36 @@ def dry_run(docs: list[dict], texts: dict[str, str], count_tokens) -> dict:
     return _summarize(parsed, refs, stats)
 
 
+def _check_active(conn, version: int, force: bool, lock: bool = False) -> None:
+    """Fail closed: a missing active_index_version row also refuses unless --force."""
+    row = conn.execute("select value from app_config where key = 'active_index_version'" + (" for share" if lock else "")).fetchone()
+    if force:
+        return
+    if row is None:
+        raise ActiveVersionError("app_config.active_index_version is missing; refusing without --force")
+    if int(row[0]) == version:
+        raise ActiveVersionError(f"index_version {version} is the active version; refusing without --force")
+
+
+_sleep = time.sleep
+RETRIES = 3
+
+
+def _embed_retry(batch: list[str], embed: Embed) -> list[list[float]]:
+    for attempt in range(RETRIES):
+        try:
+            return embed(batch)
+        except LLMOffline:
+            if attempt == RETRIES - 1:
+                raise
+            _sleep(attempt + 1)  # 1 s, 2 s
+    raise AssertionError("unreachable")
+
+
 def embed_all(texts: list[str], embed: Embed) -> list[list[float]]:
     out: list[list[float]] = []
     for i in range(0, len(texts), BATCH):
-        out += embed(texts[i : i + BATCH])
+        out += _embed_retry(texts[i : i + BATCH], embed)
     if len(out) != len(texts) or any(len(v) != DIM for v in out):
         raise ValueError(f"embedder must return {len(texts)} vectors of {DIM} dims")
     return out
@@ -152,13 +180,12 @@ def _vec(v: list[float]) -> str:
 
 def run(conn: psycopg.Connection, docs: list[dict], texts: dict[str, str], version: int, embed: Embed,
         count_tokens: Callable[[str], int], force: bool = False) -> dict:
-    active = conn.execute("select value from app_config where key = 'active_index_version'").fetchone()
-    if active and int(active[0]) == version and not force:
-        raise ActiveVersionError(f"index_version {version} is the active version; refusing without --force")
+    _check_active(conn, version, force)  # fail fast, before the expensive embedding; re-checked under lock below
     parsed, refs, stats = _build(docs, texts, count_tokens)
     chunks = [c for p in parsed for c in p.chunks]
     vecs = embed_all([c.embed_text for c in chunks], embed)
     with conn.transaction(), conn.cursor() as cur:
+        _check_active(cur, version, force, lock=True)  # TOCTOU: `for share` blocks a concurrent switch until we commit
         for t in ("chunks", "legal_refs", "articles"):
             cur.execute(f"delete from {t} where index_version = %s", (version,))
         cols = ", ".join(DOC_COLS)
@@ -182,12 +209,19 @@ def run(conn: psycopg.Connection, docs: list[dict], texts: dict[str, str], versi
     return {"docs": summary, "chunks": len(chunks), "refs": len(refs), "unresolved": stats["unresolved"]}
 
 
-def gateway_embed() -> Embed:
-    from app.llm.gateway import Gateway
+class GatewayEmbed:
+    """Sync wrapper over Gateway.embed with its own event loop; call close() when done."""
 
-    gw = Gateway(os.environ["LLM_BASE_URL"], os.environ["LLM_API_KEY"])
-    loop = asyncio.new_event_loop()
-    return lambda texts: loop.run_until_complete(gw.embed(texts))
+    def __init__(self) -> None:
+        self.gw = Gateway(os.environ["LLM_BASE_URL"], os.environ["LLM_API_KEY"])
+        self.loop = asyncio.new_event_loop()
+
+    def __call__(self, texts: list[str]) -> list[list[float]]:
+        return self.loop.run_until_complete(self.gw.embed(texts))
+
+    def close(self) -> None:
+        self.loop.run_until_complete(self.gw.aclose())
+        self.loop.close()
 
 
 def load_corpus() -> tuple[list[dict], dict[str, str]]:
@@ -213,7 +247,11 @@ def main() -> int:
         return 0
     try:
         with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True, prepare_threshold=None) as conn:
-            run(conn, docs, texts, a.index_version, gateway_embed(), count, a.force)
+            embed = GatewayEmbed()
+            try:
+                run(conn, docs, texts, a.index_version, embed, count, a.force)
+            finally:
+                embed.close()
     except ActiveVersionError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

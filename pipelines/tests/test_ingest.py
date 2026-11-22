@@ -2,7 +2,9 @@ import hashlib
 import random
 from datetime import date
 
+import psycopg
 import pytest
+from app.llm.gateway import LLMOffline
 
 from rag_pipelines import ingest
 
@@ -165,3 +167,108 @@ def test_export_roundtrip(conn, tmp_path, db_url):
     assert len(pq.read_table(tmp_path / "v2.articles.parquet")) == count(conn, "articles", 2)
     assert len(pq.read_table(tmp_path / "v2.legal_docs.parquet")) == 2
     assert len(pq.read_table(tmp_path / "v2.legal_refs.parquet")) == count(conn, "legal_refs", 2)
+
+
+# ---- safety: nothing partial is ever written -------------------------------------------------------------------------
+
+
+def snapshot(conn, v: int):
+    return [conn.execute(q, (v,)).fetchall() for q in (
+        "select id, embed_text, embedding::text, fts_noaccent::text from chunks where index_version = %s order by id",
+        "select id, content, kind from articles where index_version = %s order by id",
+        "select src_id, dst_doc_code, dst_article, rel from legal_refs where index_version = %s order by 1, 2, 3, 4",
+    )]
+
+
+def boom(texts):
+    raise RuntimeError("embedder down")
+
+
+def test_embed_failure_leaves_existing_rows_unchanged(conn):
+    run(conn, 2)
+    before = snapshot(conn, 2)
+    with pytest.raises(RuntimeError):
+        ingest.run(conn, CORPUS, TEXTS, 2, boom, COUNT)
+    assert snapshot(conn, 2) == before
+
+
+def test_embed_failure_on_new_version_writes_nothing(conn):
+    with pytest.raises(RuntimeError):
+        ingest.run(conn, CORPUS, TEXTS, 3, boom, COUNT)
+    assert (count(conn, "chunks"), count(conn, "articles"), count(conn, "legal_refs"), count(conn, "legal_docs")) == (0, 0, 0, 0)
+
+
+def test_mid_transaction_failure_rolls_back(conn, monkeypatch):
+    run(conn, 2)
+    before = snapshot(conn, 2)
+    # articles are already inserted (and the old rows deleted) when chunk params are built -> _vec raises mid-transaction
+    monkeypatch.setattr(ingest, "_vec", lambda v: (_ for _ in ()).throw(RuntimeError("bad row")))
+    with pytest.raises(RuntimeError, match="bad row"):
+        run(conn, 2)
+    assert snapshot(conn, 2) == before
+
+
+def test_db_constraint_failure_rolls_back(conn):
+    run(conn, 2)
+    before = snapshot(conn, 2)
+    bad = [CORPUS[0] | {"replaced_by": "NOPE"}, CORPUS[1]]  # FK violation after the deletes
+    with pytest.raises(psycopg.errors.ForeignKeyViolation):
+        run(conn, 2, bad)
+    assert snapshot(conn, 2) == before
+
+
+def test_active_version_flipped_during_embedding_is_caught(conn):
+    def flip(texts):
+        conn.execute("update app_config set value = '2' where key = 'active_index_version'")
+        return fake_embed(texts)
+
+    with pytest.raises(ingest.ActiveVersionError):
+        ingest.run(conn, CORPUS, TEXTS, 2, flip, COUNT)
+    assert count(conn, "chunks") == 0 and count(conn, "legal_docs") == 0
+
+
+def test_missing_active_row_fails_closed(conn):
+    conn.execute("delete from app_config where key = 'active_index_version'")
+    with pytest.raises(ingest.ActiveVersionError):
+        run(conn, 2)
+    assert count(conn, "chunks") == 0
+    run(conn, 2, force=True)
+    assert count(conn, "chunks", 2) > 0
+
+
+# ---- embed retry ------------------------------------------------------------------------------------------------------
+
+
+def test_embed_retries_then_succeeds(monkeypatch):
+    sleeps, calls = [], []
+    monkeypatch.setattr(ingest, "_sleep", sleeps.append)
+
+    def flaky(texts):
+        calls.append(1)
+        if len(calls) < 3:
+            raise LLMOffline("ngrok hiccup")
+        return fake_embed(texts)
+
+    assert len(ingest.embed_all(["a", "b"], flaky)) == 2
+    assert sleeps == [1, 2] and len(calls) == 3
+
+
+def test_embed_gives_up_after_three_attempts(monkeypatch):
+    sleeps, calls = [], []
+    monkeypatch.setattr(ingest, "_sleep", sleeps.append)
+
+    def down(texts):
+        calls.append(1)
+        raise LLMOffline("down")
+
+    with pytest.raises(LLMOffline):
+        ingest.embed_all(["a"], down)
+    assert len(calls) == 3 and sleeps == [1, 2]
+
+
+def test_export_missing_version_raises(conn, tmp_path, db_url):
+    from rag_pipelines import export_index
+
+    with pytest.raises(ValueError, match="no chunks"):
+        export_index.export(db_url, 9, tmp_path)
+    assert not (tmp_path / "v9.parquet").exists()
