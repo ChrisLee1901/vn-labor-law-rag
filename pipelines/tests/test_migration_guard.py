@@ -55,6 +55,15 @@ def test_unparseable_would_push_fails_closed(tmp_path):
     assert run(tmp_path, "select 1;", dry="Would push these migrations:\n") == 1
 
 
+def test_unrecognized_wording_fails_closed(tmp_path, capsys):
+    assert run(tmp_path, "drop table t;", dry="Nothing to see here.\n") == 1
+    assert "Không nhận ra" in capsys.readouterr().out
+
+
+def test_parsed_and_clean_passes(tmp_path):
+    assert run(tmp_path, "alter table a add column b int;") == 0
+
+
 def test_existing_migrations_are_clean():
     root = Path(__file__).parents[2] / "supabase" / "migrations"
     dry = "Would push these migrations:\n" + "\n".join(

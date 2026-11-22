@@ -100,17 +100,18 @@ jobs:
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: pnpm exec playwright test e2e/offline.spec.ts e2e/docs.spec.ts
+        # --trace off: trace zip ghi cả request header (x-vercel-protection-bypass); log Actions được che secret nhưng artifact thì không.
+        run: pnpm exec playwright test --trace off e2e/offline.spec.ts e2e/docs.spec.ts
+      # Chỉ HTML report (không trace, không video; test-results chứa trace zip nên không upload).
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report-preview
-          path: |
-            frontend/playwright-report
-            frontend/test-results
-          retention-days: 7
+          path: frontend/playwright-report
+          retention-days: 3
 
-  # Environment `production` (có thể bắt reviewer) đặt ở đây; deploy cần migrate nên cũng bị chặn theo. Secret để cấp repo.
+  # Environment `production` (khóa vào nhánh main, chứa secret Supabase) đặt ở cả `migrate` lẫn `deploy`: workflow của PR
+  # không chạy được hai job này nên không đọc được secret Environment. Có Required reviewers thì duyệt hai lần (docs/deploy.md).
   migrate:
     if: inputs.environment == 'production'
     runs-on: ubuntu-latest
@@ -139,6 +140,7 @@ jobs:
     if: inputs.environment == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: production
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

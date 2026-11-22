@@ -11,7 +11,7 @@ Workflow: `.github/workflows/deploy.yml` (tái sử dụng, `on: workflow_call`)
 | PR từ nhánh cùng repo, `ci-ok` xanh | chạy: `gate` (thiếu secret Vercel thì bỏ qua kèm `::notice::`), rồi `preview` | bỏ qua (không phải `push`) |
 | PR từ fork | bỏ qua (`head.repo != repo`, fork không có secret) | bỏ qua |
 | PR của Dependabot | bỏ qua (secret Dependabot tách riêng, không có secret Vercel) | bỏ qua |
-| `push` vào `main`, `ci-ok` xanh | bỏ qua | chạy: `migrate` (Environment `production`) rồi `deploy` |
+| `push` vào `main`, `ci-ok` xanh | bỏ qua | chạy: `migrate` rồi `deploy` (cả hai Environment `production`) |
 | `ci-ok` đỏ | bỏ qua | bỏ qua |
 
 `deploy-prod` có `concurrency: deploy-production`, `cancel-in-progress: false`: các lần push xếp hàng, không hủy deploy đang chạy giữa chừng. `migrate` và `deploy` nằm cùng workflow tái sử dụng (job của workflow khác không đưa vào `needs` của job gọi được), `deploy` có `needs: migrate` nên chỉ chạy khi migration xong.
@@ -20,17 +20,17 @@ Workflow: `.github/workflows/deploy.yml` (tái sử dụng, `on: workflow_call`)
 
 `vercel pull --environment=preview` -> kiểm tra Vercel có `API_ORIGIN` hoặc `NEXT_PUBLIC_SITE_URL` (đỏ sớm nếu thiếu, không in giá trị) -> `vercel build` -> `vercel deploy --prebuilt` -> URL vào job summary và sticky comment (`header: preview-url`, step này `continue-on-error`) -> Playwright với `BASE_URL=<url>` chỉ chạy `e2e/offline.spec.ts` và `e2e/docs.spec.ts`. Các spec còn lại (`online-mock`, `layout`) cần stub API cục bộ nên không chạy trên preview.
 
-Deployment Protection của Vercel chặn request tự động tới URL preview (401). Đặt secret `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel: Settings, Deployment Protection, Protection Bypass for Automation) thì `playwright.config.ts` gửi header `x-vercel-protection-bypass` (chỉ khi có `BASE_URL`; chạy cục bộ không đổi). Không đặt thì Playwright nhận 401 và job đỏ.
+Deployment Protection của Vercel chặn request tự động tới URL preview (401). Đặt secret `VERCEL_AUTOMATION_BYPASS_SECRET` (Vercel: Settings, Deployment Protection, Protection Bypass for Automation) thì `playwright.config.ts` gửi header `x-vercel-protection-bypass` (chỉ khi có `BASE_URL`; chạy cục bộ không đổi). Không đặt thì Playwright nhận 401 và job đỏ. Vì header này nằm trong trace, bước Playwright chạy với `--trace off` và chỉ upload HTML report (3 ngày, không upload `test-results`): artifact không được che secret như log. Chạy cục bộ trace vẫn `retain-on-failure`.
 
 ### Production
 
-1. `migrate` (Environment `production`): `supabase link`, rồi `supabase db push --dry-run` (in vào log và job summary), rồi `scripts/migration_guard.py`, rồi `supabase db push`.
+1. `migrate` (Environment `production`; `deploy` cũng dùng Environment này): `supabase link`, rồi `supabase db push --dry-run` (in vào log và job summary), rồi `scripts/migration_guard.py`, rồi `supabase db push`.
 2. `deploy`: `vercel pull --environment=production`, kiểm biến như trên, `vercel build --prod`, `vercel deploy --prebuilt --prod`.
 3. Smoke: gọi `GET <url>/api/health` mỗi 5 s, tối đa 24 lần (~2 phút), **đỏ** nếu JSON không có `db == "ok"`. Không đòi `llm: "online"` (Kaggle thường tắt). URL deployment cũng bị Deployment Protection chặn, nên gần như bắt buộc phải có `VERCEL_AUTOMATION_BYPASS_SECRET` (header được gửi nếu secret có).
 
 ### Guard migration (luật 5: chỉ additive)
 
-`scripts/migration_guard.py` đọc tên các migration sắp áp từ đầu ra `--dry-run`, bỏ comment SQL, và **fail** nếu gặp `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, `DELETE FROM`. Cố ý thì thêm dòng `-- allow-destructive: <lý do>` vào chính file migration (hiện trong diff PR, nên được review). Không đọc được tên migration từ đầu ra thì cũng fail (fail closed). Giới hạn đã biết (comment `shortcut:` trong script): bỏ comment bằng regex, `DROP INDEX/FUNCTION/POLICY` không bị chặn. Test: `pipelines/tests/test_migration_guard.py`.
+`scripts/migration_guard.py` đọc tên các migration sắp áp từ đầu ra `--dry-run`, bỏ comment SQL, và **fail** nếu gặp `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, `DELETE FROM`. Cố ý thì thêm dòng `-- allow-destructive: <lý do>` vào chính file migration (hiện trong diff PR, nên được review). Không có tên migration và đầu ra cũng không phải câu "Remote database is up to date." (hằng `UP_TO_DATE`, wording chưa xác minh tới lần chạy thật) thì **fail** (fail closed), kèm hướng dẫn xem log dry-run rồi bổ sung wording hoặc `supabase db push` thủ công. Giới hạn đã biết (comment `shortcut:` trong script): bỏ comment bằng regex, `DROP INDEX/FUNCTION/POLICY` không bị chặn. Test: `pipelines/tests/test_migration_guard.py`.
 
 Migration `20261201000300_function_search_path.sql` (ghim `search_path = public, extensions` cho `hybrid_search`, xử lý cảnh báo advisor `function_search_path_mutable`) nằm trước lần deploy production đầu tiên. Test `test_app_functions_pin_search_path` bắt hàm mới thiếu `set search_path`.
 
@@ -38,16 +38,20 @@ Migration `20261201000300_function_search_path.sql` (ghim `search_path = public,
 
 Không có giá trị thật nào nằm trong repo.
 
-**GitHub Secrets** (cấp repo; `migrate` có Environment `production` nhưng chỉ job này, nên secret cấp Environment sẽ không tới job `deploy`):
+**GitHub Secrets.** Secret cấp repo mà workflow của mọi PR cùng repo (người có quyền ghi) đọc được, vì PR chạy bản `deploy.yml` của chính nó. Vì vậy secret production nằm ở **Environment `production`** (chỉ cho nhánh `main`), còn secret preview phải ở cấp repo:
 
-| Secret | Dùng cho | Lấy ở đâu |
-|---|---|---|
-| `VERCEL_TOKEN` | `vercel pull/build/deploy` | Vercel, Account Settings, Tokens |
-| `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | chọn project | `.vercel/project.json` sau `vercel link` cục bộ |
-| `SUPABASE_ACCESS_TOKEN` | `supabase link/db push` | Supabase, Account, Access Tokens |
-| `SUPABASE_DB_PASSWORD` | `supabase db push` | mật khẩu database lúc tạo project |
-| `SUPABASE_PROJECT_REF` | `supabase link --project-ref` | Supabase, Project Settings, General |
-| `VERCEL_AUTOMATION_BYPASS_SECRET` (tùy chọn nhưng nên có) | Playwright trên preview, smoke production | Vercel, Deployment Protection, Protection Bypass for Automation |
+| Secret | Cấp | Dùng cho | Lấy ở đâu |
+|---|---|---|---|
+| `VERCEL_TOKEN` | repo (preview cần) | `vercel pull/build/deploy` | Vercel, Account Settings, Tokens |
+| `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | repo | chọn project | `.vercel/project.json` sau `vercel link` cục bộ |
+| `SUPABASE_ACCESS_TOKEN` | **Environment `production`** | `supabase link/db push` | Supabase, Account, Access Tokens |
+| `SUPABASE_DB_PASSWORD` | **Environment `production`** | `supabase db push` | mật khẩu database lúc tạo project |
+| `SUPABASE_PROJECT_REF` | **Environment `production`** | `supabase link --project-ref` | Supabase, Project Settings, General |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` (tùy chọn nhưng nên có) | repo (preview cần) | Playwright trên preview, smoke production | Vercel, Deployment Protection, Protection Bypass for Automation |
+
+Đánh đổi: `VERCEL_TOKEN` và bypass secret phải ở cấp repo vì job `preview` (không có Environment) cần chúng, nên một PR cùng repo của người có quyền ghi có thể đọc chúng. Giảm rủi ro bằng cách tạo Vercel token chỉ cho team/project này (không dùng token tài khoản), và coi quyền ghi vào repo là quyền deploy preview. Secret Supabase thì không lộ cho PR: Environment `production` chỉ chạy được từ `main`.
+
+Job `migrate` và `deploy` đều có `environment: production`. Nếu bật Required reviewers thì **duyệt hai lần** (migrate, rồi deploy). Không muốn vậy thì để trống reviewers: giới hạn "Deployment branches" = `main` đã là lớp bảo vệ chính, reviewers chỉ là thêm.
 
 **Vercel env** (Production **và** Preview; đánh dấu Sensitive cho khóa và token):
 
@@ -74,8 +78,8 @@ Trang `/van-ban*` gọi API từ server (`frontend/src/lib/api-server.ts`): `API
 1. Tạo project Vercel; `vercel link` cục bộ để lấy `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. Tắt Git integration (spike Task 0.4 đặt `"git": {"deploymentEnabled": false}` trong `vercel.json`). Chạy xong spike Task 0.4 và ghi kết quả vào `docs/spikes.md` trước.
 2. Tạo Vercel Token. Đặt toàn bộ **Vercel env** ở bảng trên cho cả Production và Preview.
 3. Vercel, Deployment Protection: tạo Protection Bypass for Automation, lấy secret.
-4. GitHub, Settings, Environments: tạo `production` (nên bật Required reviewers nếu muốn duyệt tay mỗi lần lên production; duyệt một lần ở `migrate`, `deploy` chạy tiếp).
-5. GitHub, Settings, Secrets and variables, Actions: thêm các secret ở bảng trên.
+4. GitHub, Settings, Environments: tạo `production`, mục Deployment branches chọn "Selected branches" và chỉ cho `main`. Required reviewers tùy chọn (có thì duyệt hai lần, xem trên).
+5. Thêm secret: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` **trong Environment `production`**; `VERCEL_TOKEN` (nên là token chỉ cho project này), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_AUTOMATION_BYPASS_SECRET` ở Settings, Secrets and variables, Actions (cấp repo).
 6. Vercel, Project, Firewall: tạo WAF rate-limit (mục dưới).
 7. Lần đầu: nếu project Supabase đã có bảng tạo tay trước khi dùng CLI thì `supabase db push` sẽ đụng, khi đó dùng `supabase migration repair` cho các migration đã áp. Merge một PR vào `main` và xem job `migrate` + `deploy`.
 8. Kiểm tra cuối (chưa làm, cần live batch): merge một PR -> production cập nhật, `/api/health` trả `db: "ok"`.

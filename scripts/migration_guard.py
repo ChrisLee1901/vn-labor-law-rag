@@ -17,6 +17,8 @@ DESTRUCTIVE = re.compile(
 )
 OVERRIDE = re.compile(r"^[ \t]*--[ \t]*allow-destructive:[ \t]*\S", re.MULTILINE)
 NAME = re.compile(r"\b(\d{14}_[\w-]+\.sql)\b")
+# shortcut: wording unverified until first live run; chỉ chuỗi này (chữ thường) mới được coi là "không có gì để áp".
+UP_TO_DATE = ("remote database is up to date",)
 
 
 def strip_comments(sql: str) -> str:
@@ -26,9 +28,11 @@ def strip_comments(sql: str) -> str:
 
 def check(dry_run: str, migrations: Path) -> list[str]:
     names = list(dict.fromkeys(NAME.findall(dry_run)))
-    if "would push" in dry_run.lower() and not names:
+    if not names and not any(m in dry_run.lower() for m in UP_TO_DATE):
         return [
-            "Không đọc được tên migration từ đầu ra --dry-run (định dạng CLI đổi?)."
+            "Không nhận ra đầu ra của `supabase db push --dry-run` (không có tên migration, "
+            "cũng không phải 'up to date'). Đọc log dry-run; nếu an toàn, thêm wording mới vào "
+            "UP_TO_DATE hoặc chạy `supabase db push` thủ công."
         ]
     problems = []
     for name in names:
