@@ -98,3 +98,19 @@ def test_articles_kind_column(conn):
     )
     with pytest.raises(psycopg.errors.CheckViolation):
         conn.execute(ins, ("ND293-2025:X", "x"))
+
+
+def test_app_functions_pin_search_path(conn):
+    # Hàm do extension tạo (pgvector) bị loại bằng pg_depend deptype 'e'.
+    rows = conn.execute(
+        """select p.proname, p.proconfig from pg_proc p
+           where p.pronamespace = 'public'::regnamespace
+             and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')"""
+    ).fetchall()
+    assert any(name == "hybrid_search" for name, _ in rows)
+    unpinned = [
+        name
+        for name, cfg in rows
+        if not any(c.startswith("search_path=") for c in cfg or [])
+    ]
+    assert unpinned == []
