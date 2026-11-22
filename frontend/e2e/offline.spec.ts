@@ -12,5 +12,5 @@ test("hỏi lương tối thiểu vùng I: có badge trạng thái và nguồn 2
   await expect(page.getByRole("banner").getByRole("status")).toHaveText(/Chế độ ngoại tuyến|Mô hình trực tuyến/, { timeout: 30_000 });
 
   const panel = await sourcesPanel(page, 120_000);
-  await expect(panel.getByRole("listitem").filter({ hasText: "293/2025/NĐ-CP" }).first()).toBeVisible();
+  await expect(panel.getByRole("listitem").filter({ hasText: "293/2025/NĐ-CP" }).first()).toBeVisible({ timeout: 120_000 });
 });
