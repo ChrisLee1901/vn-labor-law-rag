@@ -188,7 +188,7 @@ async def test_event_stream_happy_path_and_trace_finish():
     assert types(parts) == [
         "start", "data-status", "source-url", "text-start", "text-delta", "text-delta", "text-end", "data-trace", "finish", "[DONE]",
     ]
-    assert gw.closed and fc.flushed == 1
+    assert gw.closed and fc.flushed == 0  # flush chạy ở BackgroundTask sau response
     assert [o.name for o in fc.obs] == ["chat", "llm"] and fc.obs[0].updates[0]["output"] == "Điều 3 [S1]"
 
 

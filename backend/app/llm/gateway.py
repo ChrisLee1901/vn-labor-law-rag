@@ -5,6 +5,8 @@ from collections.abc import AsyncIterator
 
 import httpx
 
+from app.config import CHAT_MAX_TOKENS
+
 _ALLOWED = re.compile(r"^https://[a-z0-9-]+\.ngrok-free\.(app|dev)$")
 _TIMEOUT = httpx.Timeout(60.0, connect=3.0)
 
@@ -104,7 +106,7 @@ class Gateway:
         """Yield text deltas. LLMOffline nếu không kết nối/HTTP lỗi trước byte đầu; LLMStreamError nếu stream đứt,
         có `error` trong luồng, hoặc kết thúc mà không có `[DONE]` (câu trả lời cụt)."""
         url = self._url("/v1/chat/completions")
-        body = {"messages": messages, "stream": True}
+        body = {"messages": messages, "stream": True, "max_tokens": CHAT_MAX_TOKENS}
         try:
             async with self._http().stream("POST", url, json=body, headers=self._headers) as r:
                 r.raise_for_status()

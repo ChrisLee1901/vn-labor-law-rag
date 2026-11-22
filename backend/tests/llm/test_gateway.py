@@ -187,3 +187,10 @@ async def test_injected_client_is_shared_and_not_closed_by_aclose():
         assert await g.health() is True
         await g.aclose()
         assert not shared.is_closed
+
+
+@respx.mock
+async def test_chat_stream_caps_max_tokens():
+    route = respx.post(f"{URL}/v1/chat/completions").respond(content=sse("[DONE]"))
+    _ = [d async for d in gw().chat_stream([{"role": "user", "content": "hi"}])]
+    assert json.loads(route.calls[0].request.content)["max_tokens"] == 1024

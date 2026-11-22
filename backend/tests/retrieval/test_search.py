@@ -117,3 +117,15 @@ async def test_retrieve_records_spans(aconn):
     t = T()
     await retrieve("luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False, trace=t)
     assert t.names == ["hybrid_search"]  # offline: không embed/rerank
+
+
+async def test_pin_text_adds_refs_from_raw_question_deduped(aconn):
+    got = await retrieve(
+        "luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False, pin_text="Điều 12 Nghị định 145/2020 thì sao"
+    )
+    ids = [c.parent_id for c in got]
+    assert ids[0] == "ND145-2020:D12" and "ND293-2025:D3" in ids and len(ids) == len(set(ids))
+    same = await retrieve(
+        "Điều 12 Nghị định 145/2020", TODAY, OFFLINE, aconn, 1, online=False, pin_text="Điều 12 Nghị định 145/2020"
+    )
+    assert [c.parent_id for c in same].count("ND145-2020:D12") == 1

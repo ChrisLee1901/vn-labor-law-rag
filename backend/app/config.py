@@ -22,3 +22,11 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# Giới hạn thời gian / kích thước của /api/chat (Vercel dừng function ở 120 s nên ngân sách tổng là 100 s).
+CHAT_MAX_TOKENS = 1024  # max_tokens gửi cho LLM, chặn đầu ra lặp vô hạn
+CHAT_BUDGET_S = 100.0  # tổng thời gian một request chat
+CONDENSE_TIMEOUT_S = 8.0
+EMBED_TIMEOUT_S = 8.0
+RERANK_TIMEOUT_S = 8.0

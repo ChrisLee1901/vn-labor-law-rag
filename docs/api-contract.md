@@ -220,8 +220,20 @@ Header bắt buộc: `Authorization: Bearer $CRON_SECRET`. Trả 204. Thiếu ho
 |---|---|---|---|
 | 422 | `/api/chat`, `/api/feedback` | Input sai | vd `Câu hỏi quá dài (tối đa 1000 ký tự).` |
 | 429 | `/api/chat` (chỉ endpoint này) | Vượt giới hạn tần suất | `Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.` |
-| 503 | `/api/chat`, `/api/docs`, `/api/docs/{code}`, `/api/feedback` | DB không khả dụng | `Cơ sở dữ liệu tạm thời không khả dụng, vui lòng thử lại sau.` |
+| 413 | `/api/chat`, `/api/feedback` (mọi POST) | Body lớn hơn 64 KB | `Yêu cầu quá lớn.` |
+| 503 | `/api/chat`, `/api/docs`, `/api/docs/{code}`, `/api/feedback`, `/api/cron/keepalive` | DB không khả dụng | `Cơ sở dữ liệu tạm thời không khả dụng, vui lòng thử lại sau.` |
 | 404 | `/api/docs/{code}` | Mã không tồn tại | `Không tìm thấy văn bản.` |
 | 401 | `/api/cron/keepalive` | Thiếu hoặc sai `CRON_SECRET` | `Không được phép.` |
 
 `/api/health` không bao giờ trả 503: DB lỗi được báo bằng `db: "down"` với mã 200.
+
+Mọi lỗi HTTP đều có body `{"detail": "..."}` và header `x-content-type-options: nosniff`, `cache-control: no-store`. Ngoài bảng trên: 404 đường dẫn không tồn tại `Không tìm thấy đường dẫn.`, 405 sai phương thức `Phương thức không được hỗ trợ.`, 500 lỗi hệ thống `Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.`
+
+### Lỗi trong stream (`error` part)
+
+| `errorText` | Khi nào |
+|---|---|
+| `Kết nối tới mô hình bị gián đoạn, vui lòng thử lại.` | LLM đứt giữa chừng hoặc lỗi bất ngờ sau `start` |
+| `Mô hình trả lời quá lâu, vui lòng thử lại.` | Quá ngân sách thời gian của một request (100 s) |
+
+Nếu client ngắt kết nối, server dừng sinh và không phát thêm part nào.

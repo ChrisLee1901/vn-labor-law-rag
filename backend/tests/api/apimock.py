@@ -1,9 +1,11 @@
+import asyncio
 import json
 
 import httpx
 import respx
 
 GW = "https://abc-12.ngrok-free.app"
+DONE_LEN = len(b"data: [DONE]" + bytes([10, 10]))
 QUESTION = "Mức lương tối thiểu vùng I là bao nhiêu?"
 
 
@@ -38,14 +40,26 @@ class Gateway:
         self.condense_fails = False
         self.stream_error = False
         self.online = online
+        self.hang: set[str] = set()  # {"condense", "embed", "rerank", "stream"}: treo cho tới khi bị hủy
+        self.endless = False  # stream không bao giờ kết thúc
+        self.probe = None  # callable(name) gọi khi embed / rerank tới gateway
 
-    def _chat(self, request: httpx.Request) -> httpx.Response:
+    async def _chat(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         self.chat_bodies.append(body)
         if not body.get("stream"):
+            if "condense" in self.hang:
+                await asyncio.sleep(60)
             if self.condense_fails:
                 return httpx.Response(500)
             return httpx.Response(200, json={"choices": [{"message": {"content": self.condensed}}]})
+        if self.endless:
+            async def forever():
+                while True:
+                    yield sse_body("lặp ")[:-DONE_LEN]
+                    await asyncio.sleep(0.005)
+
+            return httpx.Response(200, content=forever())
         if self.stream_error:
             async def boom():
                 for d in self.answer[:2]:
@@ -55,12 +69,20 @@ class Gateway:
             return httpx.Response(200, content=boom())
         return httpx.Response(200, content=sse_body(*self.answer))
 
-    def _embed(self, request: httpx.Request) -> httpx.Response:
+    async def _embed(self, request: httpx.Request) -> httpx.Response:
+        if self.probe:
+            self.probe("embed")
+        if "embed" in self.hang:
+            await asyncio.sleep(60)
         texts = json.loads(request.content)["input"]
         self.embed_inputs += texts
         return httpx.Response(200, json={"data": [{"index": i, "embedding": [0.01] * 1024} for i in range(len(texts))]})
 
-    def _rerank(self, request: httpx.Request) -> httpx.Response:
+    async def _rerank(self, request: httpx.Request) -> httpx.Response:
+        if self.probe:
+            self.probe("rerank")
+        if "rerank" in self.hang:
+            await asyncio.sleep(60)
         docs = json.loads(request.content)["documents"]
         return httpx.Response(200, json={"results": [{"index": i, "relevance_score": self.rerank_score} for i in range(len(docs))]})
 

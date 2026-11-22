@@ -1,6 +1,8 @@
 """POST /api/chat: kiểm tra đầu vào -> rate limit -> truy hồi (mọi thứ có thể lỗi HTTP) -> stream SSE (lỗi thành chunk `error`)."""
+import asyncio
 import logging
 import re
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import date
@@ -9,10 +11,11 @@ import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from psycopg import AsyncConnection
+from starlette.background import BackgroundTask
 
 from app import ratelimit, stream
-from app.api.deps import db_conn, llm_online, read_json, refusal_tau, today_vn
-from app.config import Settings, get_settings
+from app.api.deps import PooledReader, llm_online, read_json, refusal_tau, today_vn
+from app.config import CHAT_BUDGET_S, CONDENSE_TIMEOUT_S, Settings, get_settings
 from app.db import active_index_version
 from app.legal.dates import extract_as_of
 from app.legal.ids import is_appendix_id
@@ -30,9 +33,12 @@ router = APIRouter()
 MAX_Q, MAX_MESSAGES = 1000, 10
 OFFLINE_TEXT = "Mô hình đang ngoại tuyến. Dưới đây là các điều luật liên quan nhất:"
 CANNED_LABEL = "Câu trả lời đã lưu từ phiên trực tuyến."
+OVERTIME_TEXT = "Mô hình trả lời quá lâu, vui lòng thử lại."
 STREAM_ERROR = "Kết nối tới mô hình bị gián đoạn, vui lòng thử lại."
 RATE_LIMITED = "Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút."
 TEXT_ID = "t1"
+DISCONNECT_POLL_EVERY = 8  # số delta giữa hai lần hỏi request.is_disconnected()
+ABORT_FLUSH_S = 1.0
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -123,22 +129,25 @@ async def build_plan(
     if online and any(m["role"] == "user" for m in history):  # từ lượt hỏi thứ 2
         with trace.span("condense"):
             try:
-                condensed = nfc(await gw.chat_once(condense_messages(history, question))).strip()
+                async with asyncio.timeout(CONDENSE_TIMEOUT_S):
+                    condensed = nfc(await gw.chat_once(condense_messages(history, question))).strip()
                 search_q = condensed[:MAX_Q] or question
             except Exception as e:  # condense hỏng thì dùng câu hỏi gốc
                 log.warning("condense failed, using raw question: %r", e)
-    async with db_conn(request) as conn:
-        iv = await active_index_version(conn)
-        meta = {"index_version": iv, "as_of": as_of.isoformat(), "prompt_version": PROMPT_VERSION}
-        if not online and (canned := await _canned(conn, question, llm)):
-            canned.meta = {**meta, "mode": "offline", "canned": True}
-            return canned
-        tau = await refusal_tau(conn)
-        cands = await retrieve(search_q[:MAX_QUERY_CHARS], as_of, gw, conn, iv, online, trace=trace)
-        docs: list[SourceDoc] = []
-        if cands and not should_refuse(cands, tau):
-            with trace.span("expand"):
-                docs = await expand([c.parent_id for c in cands], conn, iv, as_of, max_extra=4 if online else 0)
+    conn = PooledReader(request)  # mượn pool từng câu lệnh: không giữ kết nối khi chờ embed / rerank
+    iv = await active_index_version(conn)  # type: ignore[arg-type]
+    meta = {"index_version": iv, "as_of": as_of.isoformat(), "prompt_version": PROMPT_VERSION}
+    if not online and (canned := await _canned(conn, question, llm)):  # type: ignore[arg-type]
+        canned.meta = {**meta, "mode": "offline", "canned": True}
+        return canned
+    tau = await refusal_tau(conn)  # type: ignore[arg-type]
+    cands = await retrieve(
+        search_q[:MAX_QUERY_CHARS], as_of, gw, conn, iv, online, trace=trace, pin_text=question[:MAX_QUERY_CHARS]  # type: ignore[arg-type]
+    )
+    docs: list[SourceDoc] = []
+    if cands and not should_refuse(cands, tau):
+        with trace.span("expand"):
+            docs = await expand([c.parent_id for c in cands], conn, iv, as_of, max_extra=4 if online else 0)  # type: ignore[arg-type]
     if not docs:
         return Plan("refused", llm, text=REFUSAL_TEXT, meta={**meta, "mode": "refused"})
     sources = _source_parts(docs)
@@ -150,18 +159,41 @@ async def build_plan(
     )
 
 
-async def close_trace(trace: Trace, output: str | None = None, meta: dict | None = None) -> None:
-    """Kết thúc trace và flush (chặn mạng nên chạy trong thread); shield để chạy được cả khi request bị hủy."""
-    with anyio.CancelScope(shield=True):
-        trace.finish(output, meta)
-        if trace.enabled:
-            await anyio.to_thread.run_sync(trace.flush)
+async def flush_trace(trace: Trace) -> None:
+    """Flush Langfuse (chặn mạng nên chạy trong thread). Đường thường: chạy làm BackgroundTask sau khi response đã đóng."""
+    if trace.enabled:
+        await anyio.to_thread.run_sync(trace.flush)
 
 
-async def event_stream(plan: Plan, gw: Gateway, trace: Trace) -> AsyncIterator[bytes]:
+async def close_trace(trace: Trace, output: str | None = None, meta: dict | None = None, flush: bool = True) -> None:
+    """Kết thúc trace. `flush=True` (đường hủy/lỗi, response không còn chạy được background): flush shield nhưng tối đa ABORT_FLUSH_S."""
+    trace.finish(output, meta)
+    if flush and trace.enabled:
+        with anyio.move_on_after(ABORT_FLUSH_S, shield=True):
+            await anyio.to_thread.run_sync(trace.flush, abandon_on_cancel=True)
+
+
+class _Overtime(Exception):
+    pass
+
+
+async def _disconnected(request: Request | None) -> bool:
+    if request is None:
+        return False
+    try:
+        return await request.is_disconnected()
+    except Exception:
+        return False
+
+
+async def event_stream(
+    plan: Plan, gw: Gateway, trace: Trace, request: Request | None = None, deadline: float | None = None
+) -> AsyncIterator[bytes]:
+    """`deadline`: thời điểm `time.monotonic()` phải xong (None = không giới hạn). Ngắt kết nối: dừng, đóng upstream, không phát gì thêm."""
     answer: list[str] = []
     upstream = None
     meta = dict(plan.meta)
+    done = False
     try:
         try:
             yield stream.sse(stream.start("msg_" + trace.trace_id[:12]))
@@ -171,8 +203,26 @@ async def event_stream(plan: Plan, gw: Gateway, trace: Trace) -> AsyncIterator[b
             yield stream.sse(stream.text_start(TEXT_ID))
             if plan.mode == "rag":
                 upstream = gw.chat_stream(plan.messages or [])
+                it = upstream.__aiter__()
+                n = 0
                 with trace.span("llm"):
-                    async for delta in upstream:
+                    while True:
+                        if n % DISCONNECT_POLL_EVERY == 0 and await _disconnected(request):
+                            meta["disconnected"] = True
+                            return
+                        left = None if deadline is None else deadline - time.monotonic()
+                        if left is not None and left <= 0:
+                            raise _Overtime
+                        try:
+                            async with asyncio.timeout(left) as scope:
+                                delta = await anext(it)
+                        except StopAsyncIteration:
+                            break
+                        except TimeoutError:
+                            if scope.expired():
+                                raise _Overtime from None
+                            raise
+                        n += 1
                         answer.append(delta)
                         yield stream.sse(stream.text_delta(TEXT_ID, delta))
             else:
@@ -185,11 +235,15 @@ async def event_stream(plan: Plan, gw: Gateway, trace: Trace) -> AsyncIterator[b
                     yield stream.sse(stream.data_citation_warning(rep.invalid, rep.article_mismatch))
             yield stream.sse(stream.data_trace(trace.trace_id))
             yield stream.sse(stream.finish())
+        except _Overtime:
+            meta["error"] = "timeout"
+            yield stream.sse(stream.error(OVERTIME_TEXT))
         except Exception as e:  # sau `start`: báo lỗi trong stream, không có `finish`
             log.warning("chat stream failed: %r", e)
             meta["error"] = type(e).__name__
             yield stream.sse(stream.error(STREAM_ERROR))
         yield stream.DONE
+        done = True  # tới đây tức là response đã gửi hết; flush do BackgroundTask lo
     finally:  # chạy cả khi client ngắt kết nối (hủy / GeneratorExit)
         with anyio.CancelScope(shield=True):
             if upstream is not None:
@@ -197,11 +251,12 @@ async def event_stream(plan: Plan, gw: Gateway, trace: Trace) -> AsyncIterator[b
                     await upstream.aclose()
                 except Exception:
                     log.debug("upstream close failed", exc_info=True)
-        await close_trace(trace, "".join(answer), meta)
+        await close_trace(trace, "".join(answer), meta, flush=not done)
 
 
 @router.post("/api/chat")
 async def chat(request: Request, settings: Settings = Depends(get_settings)):
+    deadline = time.monotonic() + CHAT_BUDGET_S
     question, history, as_of = parse_chat(await read_json(request))
     if not await ratelimit.check(ratelimit.client_ip(request), settings=settings, client=request.app.state.http):
         raise HTTPException(429, RATE_LIMITED)
@@ -212,4 +267,8 @@ async def chat(request: Request, settings: Settings = Depends(get_settings)):
     except BaseException as e:
         await close_trace(trace, None, {"error": type(e).__name__})
         raise
-    return StreamingResponse(event_stream(plan, gw, trace), headers=stream.STREAM_HEADERS)
+    return StreamingResponse(
+        event_stream(plan, gw, trace, request, deadline),
+        headers=stream.STREAM_HEADERS,
+        background=BackgroundTask(flush_trace, trace),
+    )

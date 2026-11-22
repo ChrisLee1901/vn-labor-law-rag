@@ -89,3 +89,29 @@ async def read_json(request: Request, max_bytes: int = 64 * 1024):
         return json.loads(buf.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as e:
         raise HTTPException(422, "Nội dung yêu cầu không hợp lệ.") from e
+
+
+class _Rows:
+    def __init__(self, rows: list):
+        self._rows = rows
+
+    async def fetchall(self) -> list:
+        return self._rows
+
+    async def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+
+class PooledReader:
+    """Giống `conn.execute` của psycopg nhưng mượn kết nối từ pool cho TỪNG câu lệnh rồi trả ngay.
+
+    Pool chỉ có 1 kết nối (Supabase pooler), nên không được giữ nó trong lúc chờ embed / rerank qua mạng.
+    Chỉ dùng cho truy vấn đọc: mỗi câu là một giao dịch riêng, kết quả đã được fetch hết trước khi trả kết nối."""
+
+    def __init__(self, request: Request):
+        self._request = request
+
+    async def execute(self, query, params=None) -> _Rows:
+        async with db_conn(self._request) as conn:
+            cur = await conn.execute(query, params)
+            return _Rows(await cur.fetchall())

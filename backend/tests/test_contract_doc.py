@@ -70,3 +70,15 @@ def test_real_routes_in_contract():
     documented = table_endpoints(DOC)
     assert routes == ENDPOINTS, routes ^ ENDPOINTS
     assert routes <= documented, routes - documented
+
+
+def test_error_details_in_code_are_documented():
+    from app.api.chat import OVERTIME_TEXT, RATE_LIMITED, STREAM_ERROR
+    from app.api.deps import DB_DOWN
+
+    for text in (RATE_LIMITED, DB_DOWN, STREAM_ERROR, OVERTIME_TEXT, "Yêu cầu quá lớn.", "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.",
+                 "Không tìm thấy đường dẫn.", "Phương thức không được hỗ trợ."):
+        assert text in DOC, text
+    row503 = next(line for line in DOC.splitlines() if line.startswith("| 503 |"))
+    assert "/api/cron/keepalive" in row503
+    assert any(line.startswith("| 413 |") and "/api/chat" in line and "/api/feedback" in line for line in DOC.splitlines())

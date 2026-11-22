@@ -1,10 +1,12 @@
 """Hybrid retrieval: FTS + vector (RRF trong SQL) -> rerank qua gateway -> top Điều cha; ID nêu rõ trong câu hỏi được ghim lên đầu."""
+import asyncio
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date
 
 from psycopg import AsyncConnection
 
+from app.config import EMBED_TIMEOUT_S, RERANK_TIMEOUT_S
 from app.legal.ids import make_id, parse_id
 from app.legal.normalize import strip_diacritics
 from app.legal.refs import extract_refs
@@ -81,18 +83,28 @@ def _by_rrf(rows) -> list[Candidate]:
 
 
 async def retrieve(
-    question: str, as_of: date, gw: Gateway, conn: AsyncConnection, index_version: int, online: bool, trace=None
+    question: str,
+    as_of: date,
+    gw: Gateway,
+    conn: AsyncConnection,
+    index_version: int,
+    online: bool,
+    trace=None,
+    pin_text: str | None = None,
 ) -> list[Candidate]:
     """Online: embed + hybrid + rerank. Offline (hoặc gateway lỗi): FTS-only, xếp theo RRF. Tối đa 6 Điều cha, ID ghim đứng đầu.
 
-    `trace` (tùy chọn, app.tracing.Trace) ghi span embed / hybrid_search / rerank."""
+    `trace` (tùy chọn, app.tracing.Trace) ghi span embed / hybrid_search / rerank.
+    `pin_text`: câu hỏi gốc; ID nêu rõ trong đó cũng được ghim (hợp với ID của `question`, bỏ trùng, ID của câu gốc đứng trước).
+    embed / rerank quá EMBED_TIMEOUT_S / RERANK_TIMEOUT_S thì coi như LLMOffline (xuống cấp về FTS / thứ tự RRF)."""
     span = trace.span if trace is not None else (lambda _name: nullcontext())
     vec = None
     if online:
         try:
             with span("embed"):
-                vec = (await gw.embed([question]))[0]
-        except LLMOffline:
+                async with asyncio.timeout(EMBED_TIMEOUT_S):
+                    vec = (await gw.embed([question]))[0]
+        except (LLMOffline, TimeoutError):
             pass
     with span("hybrid_search"):
         rows = await _hybrid(conn, question, as_of, index_version, vec)
@@ -100,9 +112,13 @@ async def retrieve(
     if vec is not None and rows:
         try:
             with span("rerank"):
-                cands = await _rerank(conn, gw, question, rows, index_version)
-        except LLMOffline:
+                async with asyncio.timeout(RERANK_TIMEOUT_S):
+                    cands = await _rerank(conn, gw, question, rows, index_version)
+        except (LLMOffline, TimeoutError):
             pass
     pinned = await _pinned(conn, question, index_version)
+    if pin_text and pin_text != question:
+        raw = await _pinned(conn, pin_text, index_version)
+        pinned = raw + [c for c in pinned if c.parent_id not in {r.parent_id for r in raw}]
     taken = {c.parent_id for c in pinned}
     return (pinned + [c for c in cands if c.parent_id not in taken])[:TOP_PARENTS]
