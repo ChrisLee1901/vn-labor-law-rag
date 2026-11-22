@@ -13,16 +13,33 @@ Hướng thiết kế: nghiêm túc, giống văn bản có đóng dấu. Giấy
 | `primary` / `primary-foreground` | `0.3 0.06 255` / giấy | `0.92 0.012 85` / mực | Nút chính (xanh mực) |
 | `secondary`, `muted`, `accent` | giấy đậm hơn | mực nhạt hơn | Nền phụ, hover |
 | `muted-foreground` | `0.46 0.02 255` | `0.74 0.015 255` | Chữ phụ (tương phản 6.8 : 1 sáng, 8.0 : 1 tối) |
-| `border`, `input`, `ring` | `0.89`, `0.86`, `0.5 0.1 255` | trắng 12 %, 16 %, `0.7 0.08 255` | Viền, ô nhập, vòng focus |
+| `border` | `0.89 0.008 85` | trắng 12 % | Đường kẻ trang trí (không mang thông tin, không cần 3 : 1) |
+| `input` | `0.62 0.015 255` | `0.55 0.02 255` | Viền ô nhập và nút outline (ranh giới điều khiển, cần 3 : 1) |
+| `ring` | `0.5 0.1 255` | `0.7 0.08 255` | Vòng focus bàn phím |
 | `destructive` | `0.5 0.19 27` | `0.7 0.18 25` | Lỗi |
 | `cite`, `cite-foreground`, `cite-border` | `0.93 0.07 85`, `0.36 0.08 65`, `0.8 0.1 80` | `0.32 0.06 75`, `0.88 0.09 85`, `0.5 0.09 75` | **Chỉ** mã trích dẫn `[S1]`, số Điều, gạch chân mục đang xem. Không dùng cho nút hay trang trí |
 | `status-online`, `status-offline`, `status-down` (+ `-foreground`) | xanh lá, xám, đỏ nhạt | tương ứng, tối | `StatusBadge` |
 
-Mọi cặp chữ/nền ở trên đạt tối thiểu 6 : 1 (WCAG AA là 4.5 : 1), vòng focus đạt hơn 3 : 1. Sáng/tối theo hệ thống, nút đổi lưu `localStorage` (`next-themes`, class `.dark` trên `<html>`).
+Tương tác tính từ chính các token trên (OKLCH sang sRGB, công thức WCAG):
+
+| Cặp | Sáng | Tối |
+|---|---|---|
+| `foreground` / `background` | 16.6 | 15.5 |
+| `muted-foreground` / `background` | 6.8 | 8.0 |
+| `muted-foreground` / `muted` | 6.2 | 6.3 |
+| `primary-foreground` / `primary` | 13.1 | 13.7 |
+| `cite-foreground` / `cite` | 9.0 | 8.9 |
+| `status-*-foreground` / `status-*` (online, offline, down) | 8.9, 7.5, 6.8 | 9.6, 7.8, 8.7 |
+| `ring` / `background` (card) | 5.8 (5.9) | 6.9 (6.3) |
+| `input` / `background` (card) | 3.5 (3.9 so với card) | 3.8 (3.5 so với card) |
+
+Chữ thường đạt tối thiểu 6.2 : 1 (AA là 4.5 : 1), vòng focus và viền ô nhập đạt hơn 3 : 1 (WCAG 1.4.11). `border` chỉ khoảng 1.3 : 1 nên chỉ dùng để kẻ, không dùng làm ranh giới của điều khiển. `cite-border` (1.8 : 1 trên nền sáng) chỉ để trang trí khung trích dẫn có chữ đi kèm. Gạch chân mục đang xem dùng `cite-foreground`. Sáng/tối theo hệ thống, nút đổi lưu `localStorage` (`next-themes`, class `.dark` trên `<html>`).
+
+Focus bàn phím: nút shadcn có ring riêng. Liên kết thường dùng `focusRing` từ `@/lib/utils` (outline 2 px đầy, cách 2 px, màu `ring`). Lớp nền `outline-ring/50` của shadcn có alpha, không dùng làm vòng focus.
 
 ## Chữ
 
-Font `Be Vietnam Pro` (next/font, subset `vietnamese` + `latin`, trọng số 400/500/600/700), biến `--font-sans`. Không có font mono riêng: dùng stack mặc định của Tailwind.
+Font `Be Vietnam Pro` (next/font, subset `vietnamese` + `latin`, trọng số 400/500/600/700), biến `--font-be-vietnam`, token Tailwind `--font-sans` = Be Vietnam Pro rồi `ui-sans-serif, system-ui, "Segoe UI", sans-serif`. Không có font mono riêng: dùng stack mặc định của Tailwind.
 
 | Vai trò | Lớp Tailwind | Ghi chú |
 |---|---|---|
@@ -47,7 +64,14 @@ Tiêu đề luôn đứng thẳng (không italic).
 - AI Elements bản shadcn không còn là gói riêng. `prompt-input`, `sources`, `inline-citation`, `suggestion` là mẫu ghép từ các thành phần trên: Task 5.2 tự ghép, nguồn mẫu ở https://ui.shadcn.com/docs/ai-elements/radix/<tên>.md.
 - `StatusBadge`, `SiteHeader`, `SiteFooter`, `ThemeToggle` ở `src/components/`.
 
+## Dependencies
+
+- `cn` (npm, 0.5.2) thay cho `clsx` + `tailwind-merge`: giữ nguyên, vì đây là mặc định hiện tại của template shadcn. Đã kiểm tra chuỗi cung ứng: maintainer `shadcn`, repo `github.com/shadcn-ui/cn`, giấy phép MIT, không có script postinstall. Mã ứng dụng import `cn` từ `@/lib/utils` (file này re-export từ `"cn"`); các file sinh sẵn trong `components/ui/*` được phép import `"cn"` trực tiếp, không sửa tay.
+- `@shadcn/react` (do CLI thêm cho `message-scroller`): maintainer `shadcn`, repo `shadcn-ui/ui`.
+- `shadcn` (CLI) nằm ở devDependencies, chỉ cần lúc build cho `@import "shadcn/tailwind.css"`.
+- Node >= 22 (`engines`, `.nvmrc`), pnpm 11.22.0 (`packageManager`).
+
 ## Biến môi trường
 
-- `API_ORIGIN` (mặc định `http://127.0.0.1:8000`): đích rewrite `/api/*` khi chạy `next dev`. Trên Vercel do `vercel.json` (Task 6.3) lo.
+- `API_ORIGIN`: đích rewrite `/api/*`. Khi chạy `next dev` mặc định `http://127.0.0.1:8000`. Ở production không đặt thì không có rewrite (`vercel.json`, Task 6.3, định tuyến). Logic ở `src/lib/api-rewrites.ts`.
 - `NEXT_PUBLIC_REPO_URL`: liên kết GitHub ở footer, ẩn khi không đặt.

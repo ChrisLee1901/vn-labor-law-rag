@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 const beVietnamPro = Be_Vietnam_Pro({
   subsets: ["vietnamese", "latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-sans",
+  variable: "--font-be-vietnam",
   display: "swap",
 });
 

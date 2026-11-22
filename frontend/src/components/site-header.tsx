@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { StatusBadge } from "@/components/status-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { cn } from "@/lib/utils";
+import { cn, focusRing } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Hỏi đáp" },
@@ -19,7 +19,7 @@ export function SiteHeader() {
   return (
     <header className="border-b bg-background/95">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 sm:px-6">
-        <Link href="/" className="text-[0.9375rem] font-semibold tracking-tight">
+        <Link href="/" className={cn("text-[0.9375rem] font-semibold tracking-tight", focusRing)}>
           Trợ lý Pháp luật Lao động
         </Link>
         <div className="order-3 flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-1 md:order-2 md:w-auto md:flex-1">
@@ -30,8 +30,9 @@ export function SiteHeader() {
                 href={href}
                 aria-current={isActive(href) ? "page" : undefined}
                 className={cn(
+                  focusRing,
                   "whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground md:px-3",
-                  "aria-[current=page]:text-foreground aria-[current=page]:underline aria-[current=page]:decoration-cite-border aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-8",
+                  "aria-[current=page]:text-foreground aria-[current=page]:underline aria-[current=page]:decoration-cite-foreground aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-8",
                 )}
               >
                 {label}

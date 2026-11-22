@@ -65,6 +65,34 @@ describe("StatusBadge", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Mất kết nối dữ liệu");
   });
 
+  it("phản hồi không phải JSON -> Mất kết nối dữ liệu", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError("Unexpected token <");
+      },
+    });
+    render(<StatusBadge />);
+    await flush();
+    expect(screen.getByRole("status")).toHaveTextContent("Mất kết nối dữ liệu");
+  });
+
+  it("unmount: hủy request đang chờ và ngừng poll", async () => {
+    let signal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise(() => {}); // không bao giờ trả lời
+    });
+    const { unmount } = render(<StatusBadge />);
+    await flush();
+    expect(signal?.aborted).toBe(false);
+
+    unmount();
+    expect(signal?.aborted).toBe(true);
+    await act(() => vi.advanceTimersByTimeAsync(120_000));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("poll mỗi 30 s và tạm dừng khi tab ẩn", async () => {
     health({ llm: "online", db: "ok", index_version: 1 });
     render(<StatusBadge />);
