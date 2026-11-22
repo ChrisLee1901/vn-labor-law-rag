@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildEvalContent } from "./build-eval.mjs";
 
@@ -11,10 +13,21 @@ const RETRIEVAL = {
   index: "eval/index/v1.parquet",
 };
 const NOW = "2026-12-01T00:00:00.000Z";
+// Hình dạng của `answers_<label>_<date>.json` do rag_pipelines.eval.answer_eval ghi (schema_version 1); độ trễ tính bằng mili giây.
+const ANSWERS = {
+  schema_version: 1,
+  label: "Qwen3-8B-Q5_K_M",
+  split: "test",
+  n_queries: 80,
+  n_failed: 2,
+  metrics: { citation_precision: 0.9, citation_recall: 0.8, numeric_match: 0.7, refusal_accuracy: 0.95, injection_resisted: 1 },
+  denominators: { citation_precision: 143, citation_recall: 64, numeric_match: 17, refusal_accuracy: 76, injection_resisted: 4 },
+  latency: { n: 78, ttft_ms: { p50: 1100, p95: 2200 }, total_ms: { p50: 8000, p95: 15500 } },
+} as Record<string, unknown> & { metrics: Record<string, unknown>; latency: { n: number; ttft_ms: object; total_ms: object } };
 
 describe("buildEvalContent", () => {
   it("maps retrieval modes in canonical order, renaming `@` keys and ignoring metadata keys", () => {
-    const c = buildEvalContent(RETRIEVAL, undefined, undefined, NOW);
+    const c = buildEvalContent(RETRIEVAL, undefined, NOW);
     expect(c.status).toBe("ready");
     expect(c.generatedAt).toBe(NOW);
     expect(c.retrieval).toEqual({ n_queries: 80 });
@@ -33,44 +46,72 @@ describe("buildEvalContent", () => {
     expect(c.latency).toBeUndefined();
   });
 
-  it("adds answers, latency and model when given, picking only the documented keys", () => {
-    const answers = { split: "test", n_queries: 120, citation_precision: 0.9, citation_recall: 0.8, numeric_match: 0.7, refusal_accuracy: 0.95, injection_resisted: 1, model: "Qwen3-8B Q5_K_M", extra: 1 };
-    const latency = { split: "test", n_queries: 40, ttft_p50_s: 1.1, ttft_p95_s: 2.2, total_p50_s: 8, total_p95_s: 15.5, extra: 1 };
-    const c = buildEvalContent(RETRIEVAL, answers, latency, NOW);
-    expect(c.model).toBe("Qwen3-8B Q5_K_M");
-    expect(c.answers).toEqual({ n_queries: 120, citation_precision: 0.9, citation_recall: 0.8, numeric_match: 0.7, refusal_accuracy: 0.95, injection_resisted: 1 });
-    expect(c.latency).toEqual({ n_queries: 40, ttft_p50_s: 1.1, ttft_p95_s: 2.2, total_p50_s: 8, total_p95_s: 15.5 });
+  it("adds answers, latency (ms -> s), denominators and model from the answer_eval file, picking only documented keys", () => {
+    const c = buildEvalContent(RETRIEVAL, { ...ANSWERS, extra: 1 }, NOW);
+    expect(c.model).toBe("Qwen3-8B-Q5_K_M");
+    expect(c.answers).toEqual({
+      n_queries: 80,
+      n_failed: 2,
+      citation_precision: 0.9,
+      citation_recall: 0.8,
+      numeric_match: 0.7,
+      refusal_accuracy: 0.95,
+      injection_resisted: 1,
+      denominators: { citation_precision: 143, citation_recall: 64, numeric_match: 17, refusal_accuracy: 76, injection_resisted: 4 },
+    });
+    expect(c.latency).toEqual({ n_queries: 78, ttft_p50_s: 1.1, ttft_p95_s: 2.2, total_p50_s: 8, total_p95_s: 15.5 });
+  });
+
+  it("round-trips a result produced by the Python answer_eval (committed fixture, kept in sync by pipelines/tests/test_answer_eval.py)", () => {
+    const sample = JSON.parse(readFileSync(resolve(process.cwd(), "../pipelines/tests/fixtures/answers_sample.json"), "utf8"));
+    const c = buildEvalContent(RETRIEVAL, sample, NOW);
+    expect(c.status).toBe("ready");
+    expect(c.model).toBe(sample.label);
+    expect(c.answers).toMatchObject({ n_queries: sample.n_queries, n_failed: 0, ...sample.metrics, denominators: sample.denominators });
+    expect(c.latency).toEqual({
+      n_queries: sample.latency.n,
+      ttft_p50_s: sample.latency.ttft_ms.p50 / 1000,
+      ttft_p95_s: sample.latency.ttft_ms.p95 / 1000,
+      total_p50_s: sample.latency.total_ms.p50 / 1000,
+      total_p95_s: sample.latency.total_ms.p95 / 1000,
+    });
+    expect(JSON.stringify(c)).not.toMatch(/example|http/); // base_url_kind chứ không bao giờ là URL
   });
 
   it("refuses non-test splits, so dev numbers are never published as test results", () => {
-    expect(() => buildEvalContent({ ...RETRIEVAL, split: "dev" }, undefined, undefined, NOW)).toThrow(/split/);
+    expect(() => buildEvalContent({ ...RETRIEVAL, split: "dev" }, undefined, NOW)).toThrow(/split/);
   });
 
   it("keeps each block's own n_queries, never the retrieval one", () => {
-    const answers = { split: "test", n_queries: 80, citation_precision: 1, citation_recall: 1, numeric_match: 1, refusal_accuracy: 1, injection_resisted: 1 };
-    const c = buildEvalContent({ ...RETRIEVAL, n_queries: 68 }, answers, undefined, NOW);
+    const c = buildEvalContent({ ...RETRIEVAL, n_queries: 68 }, ANSWERS, NOW);
     expect(c.retrieval.n_queries).toBe(68);
     expect(c.answers?.n_queries).toBe(80);
+    expect(c.latency?.n_queries).toBe(78);
   });
 
-  it("applies the test-split guard to answers and latency too (missing or dev split, bad n_queries)", () => {
-    const A = { split: "test", n_queries: 80, citation_precision: 1, citation_recall: 1, numeric_match: 1, refusal_accuracy: 1, injection_resisted: 1 };
-    const L = { split: "test", n_queries: 80, ttft_p50_s: 1, ttft_p95_s: 2, total_p50_s: 3, total_p95_s: 4 };
-    expect(() => buildEvalContent(RETRIEVAL, { ...A, split: "dev" }, undefined, NOW)).toThrow(/answers.*split/);
-    expect(() => buildEvalContent(RETRIEVAL, { ...A, split: undefined }, undefined, NOW)).toThrow(/answers.*split/);
-    expect(() => buildEvalContent(RETRIEVAL, { ...A, n_queries: 0 }, undefined, NOW)).toThrow(/answers.*n_queries/);
-    expect(() => buildEvalContent(RETRIEVAL, undefined, { ...L, split: "dev" }, NOW)).toThrow(/latency.*split/);
-    expect(() => buildEvalContent(RETRIEVAL, undefined, { ...L, split: undefined }, NOW)).toThrow(/latency.*split/);
-    expect(() => buildEvalContent(RETRIEVAL, undefined, { ...L, n_queries: 1.5 }, NOW)).toThrow(/latency.*n_queries/);
-    expect(buildEvalContent(RETRIEVAL, A, L, NOW).status).toBe("ready");
+  it("applies the test-split guard to answers (missing or dev split, bad n_queries, bad latency.n, wrong schema_version)", () => {
+    const bad = (patch: object, re: RegExp) => expect(() => buildEvalContent(RETRIEVAL, { ...ANSWERS, ...patch }, NOW)).toThrow(re);
+    bad({ split: "dev" }, /answers.*split/);
+    bad({ split: undefined }, /answers.*split/);
+    bad({ n_queries: 0 }, /answers.*n_queries/);
+    bad({ n_queries: 1.5 }, /answers.*n_queries/);
+    bad({ latency: { ...ANSWERS.latency, n: 0 } }, /latency.*n/);
+    bad({ schema_version: 2 }, /schema_version/);
+    bad({ schema_version: undefined }, /schema_version/);
+    bad({ n_failed: 81 }, /n_failed/);
+    bad({ label: "" }, /label/);
+    expect(buildEvalContent(RETRIEVAL, ANSWERS, NOW).status).toBe("ready");
   });
 
   it("throws on missing or non-numeric metrics instead of writing a partial table", () => {
     const partial = Object.fromEntries(Object.entries(metrics(0.1)).filter(([k]) => k !== "ndcg@10"));
-    expect(() => buildEvalContent({ ...RETRIEVAL, fts: partial }, undefined, undefined, NOW)).toThrow(/fts.*ndcg@10/);
-    expect(() => buildEvalContent({ ...RETRIEVAL, fts: { ...metrics(0.1), "mrr@10": "0.5" } }, undefined, undefined, NOW)).toThrow(/mrr@10/);
-    expect(() => buildEvalContent({ n_queries: 80, split: "test" }, undefined, undefined, NOW)).toThrow(/mode/);
-    expect(() => buildEvalContent(RETRIEVAL, { split: "test", n_queries: 1, citation_precision: 1 }, undefined, NOW)).toThrow(/answers/);
-    expect(() => buildEvalContent(RETRIEVAL, undefined, { split: "test", n_queries: 1, ttft_p50_s: 1 }, NOW)).toThrow(/latency/);
+    expect(() => buildEvalContent({ ...RETRIEVAL, fts: partial }, undefined, NOW)).toThrow(/fts.*ndcg@10/);
+    expect(() => buildEvalContent({ ...RETRIEVAL, fts: { ...metrics(0.1), "mrr@10": "0.5" } }, undefined, NOW)).toThrow(/mrr@10/);
+    expect(() => buildEvalContent({ n_queries: 80, split: "test" }, undefined, NOW)).toThrow(/mode/);
+    const rest = Object.fromEntries(Object.entries(ANSWERS.metrics).filter(([k]) => k !== "numeric_match"));
+    expect(() => buildEvalContent(RETRIEVAL, { ...ANSWERS, metrics: rest }, NOW)).toThrow(/answers\.metrics.*numeric_match/);
+    expect(() => buildEvalContent(RETRIEVAL, { ...ANSWERS, metrics: { ...ANSWERS.metrics, refusal_accuracy: null } }, NOW)).toThrow(/refusal_accuracy/);
+    expect(() => buildEvalContent(RETRIEVAL, { ...ANSWERS, denominators: {} }, NOW)).toThrow(/denominators/);
+    expect(() => buildEvalContent(RETRIEVAL, { ...ANSWERS, latency: { ...ANSWERS.latency, ttft_ms: { p50: 1 } } }, NOW)).toThrow(/ttft_ms.*p95/);
   });
 });

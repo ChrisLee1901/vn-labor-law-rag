@@ -9,14 +9,15 @@ export type AblationRow = {
 };
 
 /** `n_queries` của mỗi khối là số câu của chính lần chạy đó (truy xuất chỉ đếm câu có gold), không suy ra từ nhau. Mọi khối chỉ trên split test. */
-export type AnswersBlock = {
-  n_queries: number;
+export type AnswerMetrics = {
   citation_precision: number;
   citation_recall: number;
   numeric_match: number;
   refusal_accuracy: number;
   injection_resisted: number;
 };
+/** Giá trị và mẫu số của từng chỉ số (xem glossary trong eval-results.tsx và docstring của rag_pipelines.eval.answer_eval). `n_failed`: câu lỗi, đã tính là sai. */
+export type AnswersBlock = AnswerMetrics & { n_queries: number; n_failed: number; denominators: AnswerMetrics };
 export type LatencyBlock = { n_queries: number; ttft_p50_s: number; ttft_p95_s: number; total_p50_s: number; total_p95_s: number };
 
 export type ReadyEval = Extract<EvalContent, { status: "ready" }>;

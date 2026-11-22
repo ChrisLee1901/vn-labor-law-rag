@@ -21,7 +21,16 @@ const READY: EvalContent = {
     { mode: "fts", hit_rate_at_1: 0.2, recall_at_5: 0.3, recall_at_10: 0.4, recall_at_20: 0.5, mrr_at_10: 0.25, ndcg_at_10: 0.3 },
     { mode: "hybrid", hit_rate_at_1: 0.41234, recall_at_5: 0.6, recall_at_10: 0.7, recall_at_20: 0.8, mrr_at_10: 0.5, ndcg_at_10: 0.55 },
   ],
-  answers: { n_queries: 80, citation_precision: 0.9, citation_recall: 0.8, numeric_match: 0.7, refusal_accuracy: 0.95, injection_resisted: 1 },
+  answers: {
+    n_queries: 80,
+    n_failed: 2,
+    citation_precision: 0.9,
+    citation_recall: 0.8,
+    numeric_match: 0.7,
+    refusal_accuracy: 0.95,
+    injection_resisted: 1,
+    denominators: { citation_precision: 143, citation_recall: 64, numeric_match: 17, refusal_accuracy: 76, injection_resisted: 4 },
+  },
   latency: { n_queries: 40, ttft_p50_s: 1.234, ttft_p95_s: 2.5, total_p50_s: 8, total_p95_s: 15.75 },
 };
 
@@ -36,7 +45,7 @@ describe("/gioi-thieu", () => {
     expect(screen.getByText("Kết quả đánh giá sẽ được công bố sau lần chạy đầu tiên khi mô hình trực tuyến.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     // answer/latency metric definitions are provisional: hidden until real results carry them
-    for (const t of [/Độ chính xác: trong các/, /Khớp số liệu/, /Từ chối đúng/, /Chống injection/, /TTFT là thời gian/]) expect(screen.queryByText(t)).toBeNull();
+    for (const t of [/Độ chính xác trích dẫn/, /Khớp số liệu/, /Từ chối đúng/, /Chống injection/, /TTFT là thời gian/]) expect(screen.queryByText(t)).toBeNull();
     expect(screen.getByText(/Tỷ lệ Điều đúng \(gold\) nằm trong k kết quả đầu/)).toBeInTheDocument();
     expect(screen.getByText(/Bộ câu hỏi vàng gồm 120 câu/)).toBeInTheDocument();
     expect(screen.getByText(/chưa có người kiểm/i)).toBeInTheDocument();
@@ -75,8 +84,13 @@ describe("/gioi-thieu", () => {
     expect(within(ablation).getByText(/68 câu có đáp án \(gold\) trong split test/)).toBeInTheDocument();
     expect(within(answers).getByText(/80 câu trong split test/)).toBeInTheDocument();
     expect(within(latency).getByText(/40 câu trong split test/)).toBeInTheDocument();
-    expect(screen.getByText(/Độ chính xác: trong các \[S#\]/)).toBeInTheDocument();
-    expect(screen.getByText(/TTFT là thời gian tới token đầu tiên/)).toBeInTheDocument();
+    expect(within(answers).getByText(/2 câu lỗi tính là sai/)).toBeInTheDocument();
+    const injection = within(answers).getByRole("row", { name: /Chống prompt injection/ });
+    expect(within(injection).getAllByRole("cell").map((c) => c.textContent)).toEqual(["1.000", "4"]);
+    expect(within(within(answers).getByRole("row", { name: /Khớp số liệu/ })).getAllByRole("cell").map((c) => c.textContent)).toEqual(["0.700", "17"]);
+    expect(screen.getByText(/mọi mã \[S#\] mà câu trả lời nêu ra/)).toBeInTheDocument();
+    expect(screen.getByText(/cận trên của khả năng chống injection/)).toBeInTheDocument();
+    expect(screen.getByText(/TTFT là thời gian từ lúc gửi câu hỏi/)).toBeInTheDocument();
     expect(screen.getByText(/Mô hình sinh câu trả lời: Qwen3-8B Q5_K_M/)).toBeInTheDocument();
   });
 
@@ -86,7 +100,7 @@ describe("/gioi-thieu", () => {
     expect(screen.getAllByRole("table")).toHaveLength(1);
     // retrieval-only run: no glossary rows for metrics that were not produced
     expect(screen.getByText(/Tỷ lệ Điều đúng \(gold\) nằm trong k kết quả đầu/)).toBeInTheDocument();
-    expect(screen.queryByText(/Độ chính xác: trong các/)).toBeNull();
+    expect(screen.queryByText(/Độ chính xác trích dẫn/)).toBeNull();
     expect(screen.queryByText(/TTFT là thời gian/)).toBeNull();
   });
 
