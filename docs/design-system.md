@@ -95,3 +95,13 @@ Tiêu đề luôn đứng thẳng (không italic).
 - Gọi API từ server component (`/van-ban*`): `API_ORIGIN` -> `NEXT_PUBLIC_SITE_URL` -> `https://$VERCEL_PROJECT_PRODUCTION_URL` -> `https://$VERCEL_URL` -> `http://127.0.0.1:8000` (chỉ `NODE_ENV=development`) -> lỗi rõ ràng. Production PHẢI đặt `API_ORIGIN` (hoặc `NEXT_PUBLIC_SITE_URL`) tường minh vì URL deployment có thể bị Deployment Protection trả 401 (Task 6.3 sẽ đặt); `VERCEL_*` chỉ là dự phòng. "Hôm nay" của huy hiệu hiệu lực tính theo `Asia/Ho_Chi_Minh`.
 - `NEXT_PUBLIC_MOCK_CHAT=1`: trang chat gọi `/api/mock/chat` (route dev, 404 khi `NODE_ENV=production`) thay cho `/api/chat`. Inlined lúc build.
 - `NEXT_PUBLIC_REPO_URL`: liên kết GitHub ở footer, ẩn khi không đặt.
+
+## Trang Giới thiệu (Task 5.4)
+
+- Cấu trúc: `h1`, bảy mục `h2` (Mục tiêu, Kiến trúc, Vì sao tự host LLM trên Kaggle, Chế độ ngoại tuyến, Kết quả đánh giá, Giới hạn đã biết, Mã nguồn và tài liệu), khoảng cách mục `space-y-10`. Đoạn và danh sách giới hạn `--measure`. Không thẻ, không hình trang trí; mục con trong "Kết quả đánh giá" là `h3`.
+- Sơ đồ kiến trúc là SVG vẽ tay trong `components/about/architecture-diagram.tsx` (inline để theo theme): chỉ dùng lớp token `fill-card`, `stroke-input`, `fill-foreground`, `fill-muted-foreground`, nhóm ranh giới nét đứt. `role="img"` có `<title>` (tên) và `<desc>` (mô tả qua `aria-describedby`). Rộng tối thiểu 700 px, dưới đó khung cuộn ngang có `tabIndex=0` và nhãn. Nguồn Mermaid: `docs/architecture.md`.
+- Số liệu eval không bao giờ nằm trong mã. `src/content/eval.json` (kiểu `EvalContent`, `eval-types.ts`) mặc định `{"status":"pending"}`; trang chỉ vẽ bảng khi `ready`. Khi `pending` là một ghi chú `muted` viền `border` (cùng kiểu banner) cùng phần phương pháp và bảng giải nghĩa chỉ số, vẫn hiển thị.
+- Bảng: chữ `text-sm tabular-nums`, số căn phải, 3 chữ số thập phân với chỉ số xếp hạng (dấu chấm, như đầu ra của công cụ eval), 2 chữ số + " s" với độ trễ. Chỉ kẻ ngang (`border-b`), `caption` là tên bảng, ô đầu mỗi hàng là `th scope=row`. Không tô màu tốt/xấu.
+- `pnpm sync-eval` (`scripts/sync-eval.mjs`, hàm thuần `scripts/build-eval.mjs`): đọc `../eval/results/retrieval_v1.json` (bắt buộc, phải là split `test`), `answers_*.json` (file cuối theo tên) và `latency.json` (tùy chọn), ghi `eval.json` với `status: "ready"`. Thiếu retrieval thì giữ pending và thoát 0; dữ liệu sai thì thoát 1, không ghi. Định dạng:
+  - `answers_*.json`: `citation_precision`, `citation_recall`, `numeric_match`, `refusal_accuracy`, `injection_resisted` (số 0..1) và `model` (chuỗi, tùy chọn).
+  - `latency.json`: `ttft_p50_s`, `ttft_p95_s`, `total_p50_s`, `total_p95_s` (giây).
