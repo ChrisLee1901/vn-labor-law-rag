@@ -25,7 +25,8 @@ export function Composer({ busy, onSend, onStop, inputRef }: Props) {
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // keyCode 229: Safari/Chrome cũ phát Enter của IME với isComposing=false.
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       submit();
     }
@@ -50,6 +51,7 @@ export function Composer({ busy, onSend, onStop, inputRef }: Props) {
           maxLength={MAX_QUESTION_CHARS}
           disabled={busy}
           rows={1}
+          aria-describedby="chat-input-count"
           placeholder="Nhập câu hỏi về pháp luật lao động hoặc BHXH…"
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
@@ -67,7 +69,9 @@ export function Composer({ busy, onSend, onStop, inputRef }: Props) {
       </div>
       <div className="flex min-h-5 justify-between gap-4 text-xs text-muted-foreground">
         <span>Enter để gửi, Shift+Enter xuống dòng.</span>
-        {value.length >= 800 && <span aria-live="polite">{`${value.length}/${MAX_QUESTION_CHARS}`}</span>}
+        <span id="chat-input-count" className={value.length >= 800 ? undefined : "sr-only"}>
+          {`${value.length}/${MAX_QUESTION_CHARS}`}
+        </span>
       </div>
     </form>
   );

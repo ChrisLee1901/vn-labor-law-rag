@@ -3,8 +3,9 @@
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CITE_HREF_PREFIX, citationsToMarkdown } from "@/lib/citations";
+import { CITE_HREF_PREFIX, remarkCitations } from "@/lib/citations";
 import { focusRing } from "@/lib/utils";
+import { isInternalDocHref } from "@/lib/docs-cache";
 import { Citation } from "./citation";
 
 const linkCls = `text-primary underline underline-offset-4 ${focusRing}`;
@@ -13,7 +14,7 @@ const linkCls = `text-primary underline underline-offset-4 ${focusRing}`;
 const components: Components = {
   a({ href = "", children }) {
     if (href.startsWith(CITE_HREF_PREFIX)) return <Citation id={href.slice(CITE_HREF_PREFIX.length)} />;
-    if (href.startsWith("/van-ban/"))
+    if (isInternalDocHref(href))
       return (
         <Link href={href} className={linkCls}>
           {children}
@@ -37,7 +38,9 @@ const components: Components = {
   h4: ({ children }) => <h4 className="mt-4 mb-1.5 text-base font-semibold">{children}</h4>,
   blockquote: ({ children }) => <blockquote className="my-3 border-l-2 border-cite-border pl-3 text-muted-foreground">{children}</blockquote>,
   code: ({ children }) => <code className="rounded-sm bg-muted px-1 py-0.5 text-[0.9em]">{children}</code>,
-  pre: ({ children }) => <pre className="my-3 overflow-x-auto rounded-md bg-muted p-3 text-sm">{children}</pre>,
+  pre: ({ children }) => (
+    <pre className="my-3 overflow-x-auto rounded-md bg-muted p-3 text-sm [&_code]:bg-transparent [&_code]:p-0">{children}</pre>
+  ),
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto">
       <table className="w-full border-collapse text-sm">{children}</table>
@@ -50,8 +53,8 @@ const components: Components = {
 export function AnswerMarkdown({ text }: { text: string }) {
   return (
     <div className="max-w-(--measure) text-base leading-relaxed wrap-anywhere">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {citationsToMarkdown(text)}
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCitations]} components={components}>
+        {text}
       </ReactMarkdown>
     </div>
   );

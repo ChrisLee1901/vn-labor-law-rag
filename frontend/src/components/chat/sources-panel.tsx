@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { SourceItem } from "@/lib/chat-types";
+import { isSafeSourceUrl } from "@/lib/docs-cache";
 import { cn, focusRing } from "@/lib/utils";
 import { EffectivenessBadge } from "./source-info";
 
@@ -36,11 +37,13 @@ export function SourcesPanel({ sources, activeId }: { sources: SourceItem[]; act
               </span>
             </p>
             <EffectivenessBadge url={s.url} />
-            <div>
-              <Link href={s.url} className={cn("font-medium text-primary underline underline-offset-4", focusRing)}>
-                Xem điều luật
-              </Link>
-            </div>
+            {isSafeSourceUrl(s.url) && (
+              <div>
+                <Link href={s.url} className={cn("font-medium text-primary underline underline-offset-4", focusRing)}>
+                  Xem điều luật
+                </Link>
+              </div>
+            )}
           </li>
         );
       })}

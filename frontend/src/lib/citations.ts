@@ -17,9 +17,34 @@ export function splitCitations(text: string): CitationSegment[] {
 
 export const CITE_HREF_PREFIX = "#cite-";
 
-/** Đổi mã trích dẫn thành liên kết markdown nội bộ `[S1](#cite-S1)`; component `a` sẽ dựng nút Citation. */
-export function citationsToMarkdown(text: string): string {
-  return splitCitations(text)
-    .map((s) => (s.kind === "text" ? s.text : `[${s.id}](${CITE_HREF_PREFIX}${s.id})`))
-    .join("");
+interface MdNode {
+  type: string;
+  value?: string;
+  url?: string;
+  children?: MdNode[];
+}
+
+// Chỉ đổi mã trong nút `text`: mã trong `inlineCode`/`code` là nút khác, còn chữ trong liên kết thì không đi vào.
+const SKIP = new Set(["link", "linkReference", "inlineCode", "code", "definition", "html"]);
+
+function rewrite(node: MdNode) {
+  if (!node.children || SKIP.has(node.type)) return;
+  node.children = node.children.flatMap((child): MdNode[] => {
+    if (child.type !== "text" || child.value === undefined) {
+      rewrite(child);
+      return [child];
+    }
+    const segs = splitCitations(child.value);
+    if (!segs.some((s) => s.kind === "cite")) return [child];
+    return segs.map((s) =>
+      s.kind === "text"
+        ? { type: "text", value: s.text }
+        : { type: "link", url: `${CITE_HREF_PREFIX}${s.id}`, children: [{ type: "text", value: s.id }] },
+    );
+  });
+}
+
+/** Remark plugin: `[S1]` trong văn bản thường -> liên kết nội bộ `#cite-S1`; component `a` dựng nút Citation. */
+export function remarkCitations() {
+  return (tree: MdNode) => rewrite(tree);
 }

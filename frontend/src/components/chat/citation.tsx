@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createContext, useContext } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { SourceItem } from "@/lib/chat-types";
+import { isSafeSourceUrl } from "@/lib/docs-cache";
 import { cn, focusRing } from "@/lib/utils";
 import { EffectivenessBadge, SourceExcerpt } from "./source-info";
 
@@ -40,9 +41,11 @@ export function Citation({ id }: { id: string }) {
         <p className="font-medium leading-snug">{source.title}</p>
         <EffectivenessBadge url={source.url} />
         <SourceExcerpt url={source.url} />
-        <Link href={source.url} className={cn("inline-block text-sm font-medium text-primary underline underline-offset-4", focusRing)}>
-          Xem điều luật
-        </Link>
+        {isSafeSourceUrl(source.url) && (
+          <Link href={source.url} className={cn("inline-block text-sm font-medium text-primary underline underline-offset-4", focusRing)}>
+            Xem điều luật
+          </Link>
+        )}
       </HoverCardContent>
     </HoverCard>
   );

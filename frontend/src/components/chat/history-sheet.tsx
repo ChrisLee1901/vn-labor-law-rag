@@ -66,12 +66,12 @@ function HistoryList({ currentId, onOpen, onDeleted }: ListProps) {
   );
 }
 
-export function HistorySheet(props: ListProps) {
+export function HistorySheet({ disabled, ...props }: ListProps & { disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
+        <Button type="button" variant="outline" size="sm" disabled={disabled}>
           <History /> Lịch sử
         </Button>
       </SheetTrigger>

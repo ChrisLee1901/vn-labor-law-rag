@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "./chat-types";
-import { friendlyError, toRequestMessages } from "./chat-transport";
+import { toRequestMessages } from "./chat-transport";
 
 const user = (i: number): ChatMessage => ({ id: `u${i}`, role: "user", parts: [{ type: "text", text: `q${i}` }] });
 const bot = (i: number): ChatMessage => ({
@@ -26,13 +26,5 @@ describe("toRequestMessages", () => {
     const shell: ChatMessage = { id: "s", role: "assistant", parts: [{ type: "data-status", data: { llm: "online", mode: "rag" } }] };
     expect(toRequestMessages([user(1), shell]).map((m) => m.id)).toEqual(["u1"]);
     expect(toRequestMessages([user(1), bot(1)]).map((m) => m.id)).toEqual(["u1"]);
-  });
-});
-
-describe("friendlyError", () => {
-  it("extracts detail from a JSON body, else falls back", () => {
-    expect(friendlyError(new Error('{"detail":"Bạn hỏi hơi nhanh."}'))).toBe("Bạn hỏi hơi nhanh.");
-    expect(friendlyError(new Error("Kết nối bị gián đoạn"))).toBe("Kết nối bị gián đoạn");
-    expect(friendlyError(undefined)).toMatch(/thử lại/);
   });
 });

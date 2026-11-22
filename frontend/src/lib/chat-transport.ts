@@ -26,14 +26,28 @@ export function createChatTransport(api: string) {
 
 export const CHAT_API = process.env.NEXT_PUBLIC_MOCK_CHAT === "1" ? "/api/mock/chat" : "/api/chat";
 
-/** Lỗi HTTP có body `{detail}` được SDK đưa vào error.message dạng JSON: lấy `detail` cho người dùng. */
+export const GENERIC_ERROR = "Đã xảy ra lỗi, vui lòng thử lại.";
+export const NETWORK_ERROR = "Kết nối bị gián đoạn, vui lòng thử lại.";
+export const STALL_ERROR = "Mô hình phản hồi quá lâu. Bạn có thể thử lại.";
+
+/**
+ * Chỉ trả văn bản tiếng Việt cho người dùng:
+ * - body HTTP JSON có `detail` là chuỗi (SDK đưa body vào error.message) -> detail của backend;
+ * - lỗi mạng/ngắt stream (TypeError, AbortError, "network error", "terminated"...) -> thông báo kết nối;
+ * - `errorText` của part `error` do backend phát (ngắn, có chữ tiếng Việt) -> giữ nguyên;
+ * - còn lại (HTML của proxy, văn bản tiếng Anh...) -> thông báo chung, không lộ nội dung thô.
+ */
 export function friendlyError(error: Error | undefined): string {
-  const raw = error?.message ?? "";
+  const raw = (error?.message ?? "").trim();
   try {
-    const detail = (JSON.parse(raw) as { detail?: unknown }).detail;
+    const detail = (JSON.parse(raw) as { detail?: unknown } | null)?.detail;
     if (typeof detail === "string" && detail) return detail;
+    return GENERIC_ERROR;
   } catch {
     // không phải JSON
   }
-  return raw || "Đã xảy ra lỗi, vui lòng thử lại.";
+  if (error instanceof TypeError || error?.name === "AbortError" || /network|fetch|terminated|socket|econn|aborted/i.test(raw))
+    return NETWORK_ERROR;
+  if (raw && raw.length <= 200 && !raw.includes("<") && /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i.test(raw)) return raw;
+  return GENERIC_ERROR;
 }

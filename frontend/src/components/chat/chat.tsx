@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { saveChat, newChatId, type StoredChat } from "@/lib/chat-storage";
-import { CHAT_API, createChatTransport, friendlyError } from "@/lib/chat-transport";
+import { CHAT_API, STALL_ERROR, createChatTransport, friendlyError } from "@/lib/chat-transport";
 import { messageInfo, userText, type ChatMessage } from "@/lib/chat-types";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { Composer } from "./composer";
@@ -15,6 +15,9 @@ import { HistorySheet } from "./history-sheet";
 import { AssistantMessage, UserMessage } from "./message-view";
 import { SourcesPanel } from "./sources-panel";
 import { SuggestedQuestions } from "./suggested-questions";
+
+/** Không có chunk nào trong ngần này thời gian khi đang stream thì coi là treo. */
+export const STALL_MS = 45_000;
 
 interface Selection {
   messageId: string;
@@ -54,6 +57,7 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [stalled, setStalled] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true); // đang ở cuối trang thì tự cuộn theo stream
@@ -71,6 +75,16 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
     const first = messages.find((m) => m.role === "user");
     saveChat({ id, title: (first ? userText(first) : "Cuộc hội thoại").slice(0, 60), updatedAt: Date.now(), messages });
   }, [busy, messages, id]);
+
+  // Đồng hồ treo: dựng lại mỗi khi `messages` đổi (mỗi part mới) hoặc trạng thái đổi.
+  useEffect(() => {
+    if (!busy) return;
+    const t = setTimeout(() => {
+      stop();
+      setStalled(true);
+    }, STALL_MS);
+    return () => clearTimeout(t);
+  }, [busy, messages, stop]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -93,12 +107,14 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
   function send(text: string) {
     dirty.current = true;
     stick.current = true;
+    setStalled(false);
     setSelection(null);
     void sendMessage({ text });
   }
 
   function retry() {
     dirty.current = true;
+    setStalled(false);
     setSelection(null);
     void regenerate();
   }
@@ -122,8 +138,8 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
             <h1 className="sr-only">Hỏi đáp pháp luật lao động</h1>
           )}
           <div className="ml-auto flex shrink-0 gap-2">
-            <HistorySheet currentId={id} onOpen={onOpen} onDeleted={(deleted) => deleted === id && onNew()} />
-            <Button type="button" variant="outline" size="sm" disabled={empty} onClick={onNew}>
+            <HistorySheet disabled={busy} currentId={id} onOpen={onOpen} onDeleted={(deleted) => deleted === id && onNew()} />
+            <Button type="button" variant="outline" size="sm" disabled={empty || busy} onClick={onNew}>
               <Plus /> Cuộc hội thoại mới
             </Button>
           </div>
@@ -163,9 +179,9 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
                 <Spinner /> Đang tìm điều luật liên quan…
               </p>
             )}
-            {error && !busy && (
+            {(error || stalled) && !busy && (
               <div role="alert" className="flex max-w-(--measure) flex-wrap items-center gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <span className="min-w-0 flex-1">{friendlyError(error)}</span>
+                <span className="min-w-0 flex-1">{stalled ? STALL_ERROR : friendlyError(error)}</span>
                 <Button type="button" size="sm" variant="outline" onClick={retry}>
                   Thử lại
                 </Button>

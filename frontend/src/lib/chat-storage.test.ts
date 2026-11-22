@@ -55,6 +55,18 @@ describe("chat-storage", () => {
     expect(loadChats()).toEqual([]);
   });
 
+  it("silently drops chats whose messages are malformed", () => {
+    const good = chat("good", 5);
+    const bad = [
+      { ...chat("b1", 4), messages: [null] },
+      { ...chat("b2", 3), messages: [{ id: "m", role: "robot", parts: [] }] },
+      { ...chat("b3", 2), messages: [{ id: "m", role: "user", parts: "x" }] },
+      { ...chat("b4", 1), messages: [{ role: "user", parts: [] }] },
+    ];
+    localStorage.setItem("rag.chats.v1", JSON.stringify([good, ...bad]));
+    expect(loadChats().map((c) => c.id)).toEqual(["good"]);
+  });
+
   it("generates distinct ids", () => {
     expect(newChatId()).not.toBe(newChatId());
   });

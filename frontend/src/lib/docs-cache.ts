@@ -33,6 +33,11 @@ export function resetDocsCache() {
   detailPromises.clear();
 }
 
+/** URL nguồn hợp lệ: `/van-ban/{code}#D{n}` hoặc `#PL{n}`. Mọi thứ khác (dữ liệu hỏng, bị sửa) không được thành liên kết. */
+export const isSafeSourceUrl = (url: string) => /^\/van-ban\/[A-Za-z0-9-]+#(D|PL)\d+$/.test(url);
+/** Liên kết nội bộ trong markdown của model: như trên nhưng neo là tùy chọn. */
+export const isInternalDocHref = (href: string) => /^\/van-ban\/[A-Za-z0-9-]+(#(D|PL)\d+)?$/.test(href);
+
 export interface SourceRef {
   code: string;
   kind: "D" | "PL";

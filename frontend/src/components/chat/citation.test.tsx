@@ -57,10 +57,40 @@ describe("Citation", () => {
   });
 });
 
+describe("Citation rewriting contexts", () => {
+  it("leaves [S1] alone in inline code, fenced blocks and link text", () => {
+    const { container } = renderText("`[S1]` và [xem [S1]](https://example.com)\n\n```\n[S2] trong khối mã\n```\n\nngoài [S1]");
+    expect(screen.getAllByRole("button")).toHaveLength(1); // chỉ [S1] ngoài cùng
+    expect(container.querySelector("code")).toHaveTextContent("[S1]");
+    expect(container.querySelector("pre")).toHaveTextContent("[S2] trong khối mã");
+    expect(screen.getByRole("link", { name: "xem [S1]" })).toBeInTheDocument();
+  });
+
+  it("does not double-style fenced code", () => {
+    const { container } = renderText("```\nx = 1\n```");
+    expect(container.querySelector("pre")?.className).toContain("[&_code]:bg-transparent");
+  });
+
+  it("does not link a tampered source url", async () => {
+    const tampered: SourceItem[] = [
+      { id: "S1", url: "javascript:alert(1)", title: "Nguồn giả" },
+      { id: "S2", url: "//evil.com/van-ban/x#D1", title: "Nguồn giả hai" },
+    ];
+    render(
+      <CitationContext.Provider value={{ sources: tampered }}>
+        <AnswerMarkdown text="[S1] [S2]" />
+      </CitationContext.Provider>,
+    );
+    await userEvent.tab();
+    expect(await screen.findByText("Nguồn giả")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+});
+
 describe("AnswerMarkdown safety", () => {
   it("renders markdown but never images or raw HTML, and hardens external links", () => {
     const { container } = renderText(
-      "**đậm** ![x](http://evil/x.png) <script>alert(1)</script> [ngoài](https://example.com) [trong](/van-ban/BLLD#D1) [js](javascript:alert(1))",
+      "**đậm** ![x](http://evil/x.png) <script>alert(1)</script> [ngoài](https://example.com) [trong](/van-ban/BLLD#D1) [js](javascript:alert(1)) [d](data:text/html,x) [e](//evil.com)",
     );
     expect(container.querySelector("strong")).toHaveTextContent("đậm");
     expect(container.querySelector("img")).toBeNull();
@@ -70,5 +100,7 @@ describe("AnswerMarkdown safety", () => {
     expect(ext).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByRole("link", { name: "trong" })).toHaveAttribute("href", "/van-ban/BLLD#D1");
     expect(screen.queryByRole("link", { name: "js" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "d" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "e" })).toBeNull();
   });
 });

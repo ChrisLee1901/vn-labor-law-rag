@@ -1,4 +1,4 @@
-import type { ChatMessage } from "./chat-types";
+import { isChatMessage, type ChatMessage } from "./chat-types";
 
 /** Lịch sử hội thoại trong localStorage. Mọi truy cập bọc try/catch: chế độ riêng tư hoặc đầy bộ nhớ thì không lưu, không lỗi. */
 export const CHATS_KEY = "rag.chats.v1";
@@ -13,7 +13,7 @@ export interface StoredChat {
 
 const isChat = (v: unknown): v is StoredChat => {
   const c = v as StoredChat | null;
-  return !!c && typeof c.id === "string" && typeof c.title === "string" && typeof c.updatedAt === "number" && Array.isArray(c.messages);
+  return !!c && typeof c.id === "string" && typeof c.title === "string" && typeof c.updatedAt === "number" && Array.isArray(c.messages) && c.messages.every(isChatMessage);
 };
 
 /** Mới nhất trước. */
