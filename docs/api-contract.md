@@ -208,7 +208,7 @@ Body: `{"trace_id":"3f2c9a1e","score":1,"comment":"Đúng, đủ ý"}`
 | `score` | `1` (hữu ích) hoặc `-1` (chưa tốt) |
 | `comment` | Tùy chọn |
 
-Trả 204, không có body.
+Trả 204, không có body. Điểm được lưu vào bảng `feedback`, rồi (sau khi response đã gửi) chuyển thành score Langfuse `user-feedback` (giá trị `1` hoặc `-1`, kiểu NUMERIC) gắn vào trace có `trace_id` đó; `comment` được che PII trước khi gửi. Langfuse chưa cấu hình, lỗi hay chậm (tối đa 5 s) thì feedback vẫn trả 204. Chi tiết span và cách kiểm tra: [runbook-observability.md](runbook-observability.md).
 
 ## GET /api/cron/keepalive
 

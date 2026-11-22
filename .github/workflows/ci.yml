@@ -50,6 +50,7 @@ jobs:
               - 'eval/golden/**'
               - 'scripts/eval_gate_precheck.py'
               - 'scripts/migration_guard.py'
+              - 'scripts/latency_report.py'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             kaggle:

@@ -26,7 +26,7 @@ from app.llm.gateway import Gateway
 from app.llm.prompt import PROMPT_VERSION, build_messages, condense_messages
 from app.retrieval.expand import SourceDoc, expand
 from app.retrieval.search import MAX_QUERY_CHARS, retrieve
-from app.tracing import Trace
+from app.tracing import Trace, run_bounded
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -230,9 +230,9 @@ async def build_plan(
 
 
 async def flush_trace(trace: Trace) -> None:
-    """Flush Langfuse (chặn mạng nên chạy trong thread). Đường thường: chạy làm BackgroundTask sau khi response đã đóng."""
+    """Flush Langfuse (chặn mạng nên chạy trong thread, có timeout). Đường thường: chạy làm BackgroundTask sau khi response đã đóng."""
     if trace.enabled:
-        await anyio.to_thread.run_sync(trace.flush)
+        await run_bounded(trace.flush)
 
 
 async def close_trace(

@@ -9,6 +9,9 @@ import uuid
 from contextlib import contextmanager
 from functools import lru_cache
 
+import anyio
+
+from app.config import LANGFUSE_FLUSH_TIMEOUT_S as FLUSH_TIMEOUT_S
 from app.config import Settings
 from app.pii import redact_pii
 
@@ -111,3 +114,32 @@ class Trace:
             self._client.flush()
         except Exception:
             log.debug("langfuse flush failed", exc_info=True)
+
+
+async def run_bounded(fn, *args) -> None:
+    """Chạy hàm chặn mạng của Langfuse trong thread, bỏ qua sau FLUSH_TIMEOUT_S (thread mồ côi tự kết thúc). Không bao giờ raise."""
+    try:
+        with anyio.move_on_after(FLUSH_TIMEOUT_S):
+            await anyio.to_thread.run_sync(fn, *args, abandon_on_cancel=True)
+    except Exception:
+        log.debug("langfuse call failed", exc_info=True)
+
+
+def send_feedback_score(
+    settings: Settings, trace_id: str, score: int, comment: str | None
+) -> None:
+    """👍/👎 thành score `user-feedback` (+1/-1) trên đúng trace. Chặn mạng: gọi qua `run_bounded`. Lỗi bị nuốt."""
+    client = get_client(settings)
+    if client is None:
+        return
+    try:
+        client.create_score(
+            name="user-feedback",
+            value=score,
+            trace_id=trace_id,
+            data_type="NUMERIC",
+            comment=redact_pii(comment) if comment else None,
+        )
+        client.flush()
+    except Exception:
+        log.debug("langfuse score failed", exc_info=True)

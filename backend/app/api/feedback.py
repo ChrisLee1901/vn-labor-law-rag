@@ -1,14 +1,17 @@
-"""POST /api/feedback: lưu điểm người dùng cho một câu trả lời (trace_id lạ vẫn nhận)."""
+"""POST /api/feedback: lưu điểm người dùng cho một câu trả lời (trace_id lạ vẫn nhận) và gửi thành score Langfuse."""
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from starlette.background import BackgroundTask
 
 from app.api.deps import db_conn, read_json
+from app.config import Settings, get_settings
+from app.tracing import run_bounded, send_feedback_score
 
 router = APIRouter()
 
 
 @router.post("/api/feedback", status_code=204)
-async def feedback(request: Request):
+async def feedback(request: Request, settings: Settings = Depends(get_settings)):
     body = await read_json(request)
     if not isinstance(body, dict):
         raise HTTPException(422, "Nội dung yêu cầu không hợp lệ.")
@@ -28,4 +31,10 @@ async def feedback(request: Request):
             "insert into feedback(trace_id, score, comment) values (%s, %s, %s)",
             (trace_id, score, comment or None),
         )
-    return Response(status_code=204)
+    # Langfuse chạy sau response, có timeout, lỗi bị nuốt: không bao giờ làm hỏng feedback đã lưu.
+    return Response(
+        status_code=204,
+        background=BackgroundTask(
+            run_bounded, send_feedback_score, settings, trace_id, score, comment
+        ),
+    )

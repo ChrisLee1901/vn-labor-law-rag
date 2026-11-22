@@ -623,9 +623,9 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 ### Task 7.1: Observability + feedback
 
-- [ ] Kiểm tra Langfuse: mỗi request có trace với các span `condense`, `embed`, `hybrid_search`, `rerank`, `expand`, `llm`; có metadata `index_version`, `mode`, `prompt_version="answer_v1"`. Feedback 👍/👎 thành score trên trace.
-- [ ] Script `scripts/latency_report.py` lấy p50/p95 theo span từ Langfuse API, ghi `eval/results/latency.md`.
-- [ ] Commit `feat(obs): span-level tracing and latency report`.
+- [ ] Kiểm tra Langfuse: mỗi request có trace với các span `condense`, `embed`, `hybrid_search`, `rerank`, `expand`, `llm`; có metadata `index_version`, `mode`, `prompt_version="answer_v1"`. Feedback 👍/👎 thành score trên trace. (Code + test với Langfuse giả xong; kiểm trên Langfuse thật chưa làm: checklist ở `docs/runbook-observability.md`.)
+- [x] Script `scripts/latency_report.py` lấy p50/p95 theo span từ Langfuse API, ghi `eval/results/latency.md`.
+- [x] Commit `feat(obs): span-level tracing and latency report`.
 
 ### Task 7.2: Ablation và A/B model
 

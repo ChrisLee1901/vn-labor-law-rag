@@ -30,3 +30,6 @@ CHAT_BUDGET_S = 100.0  # tổng thời gian một request chat
 CONDENSE_TIMEOUT_S = 8.0
 EMBED_TIMEOUT_S = 8.0
 RERANK_TIMEOUT_S = 8.0
+LANGFUSE_FLUSH_TIMEOUT_S = (
+    5.0  # tối đa chờ Langfuse flush (span, score) sau khi response đã đóng
+)
