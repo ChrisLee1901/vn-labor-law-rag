@@ -18,12 +18,16 @@ class LLMStreamError(Exception):
 
 
 class Gateway:
-    def __init__(self, base_url: str | None, api_key: str, *, allow_any: bool = False):
+    def __init__(
+        self, base_url: str | None, api_key: str, *, allow_any: bool = False, client: httpx.AsyncClient | None = None
+    ):
         # allow_any chỉ dùng trong test (bỏ kiểm tra allowlist ngrok); production luôn để False.
+        # client: client dùng chung của app; Gateway không sở hữu nên aclose() không đóng nó.
         self.base_url = base_url.rstrip("/") if base_url else None
         self.api_key = api_key
         self.allow_any = allow_any
-        self._client: httpx.AsyncClient | None = None
+        self._client = client
+        self._owns_client = client is None
 
     def is_allowed(self, url: str | None = None) -> bool:
         return bool(url) and _ALLOWED.match(url) is not None  # type: ignore[arg-type]
@@ -44,6 +48,8 @@ class Gateway:
         return self._client
 
     async def aclose(self) -> None:
+        if not self._owns_client:
+            return
         c, self._client = self._client, None
         if c is not None:
             await c.aclose()
@@ -76,6 +82,16 @@ class Gateway:
         if any(not 0 <= i < len(docs) for i, _ in out):
             raise LLMOffline("rerank index out of range")
         return out
+
+    async def chat_once(self, messages: list[dict], max_tokens: int = 128) -> str:
+        """Gọi chat không stream (viết lại câu hỏi). LLMOffline nếu lỗi hạ tầng hoặc phản hồi sai dạng."""
+        res = await self._post(
+            "/v1/chat/completions", {"messages": messages, "stream": False, "max_tokens": max_tokens, "temperature": 0}
+        )
+        try:
+            return str(res["choices"][0]["message"]["content"]).strip()
+        except (KeyError, IndexError, TypeError) as e:
+            raise LLMOffline(f"malformed chat response: {e!r}") from e
 
     async def health(self) -> bool:
         try:

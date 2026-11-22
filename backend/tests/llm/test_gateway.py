@@ -1,3 +1,4 @@
+import json
 import httpx
 import pytest
 import respx
@@ -158,3 +159,31 @@ async def test_client_reused_and_closed():
     assert g._client is c and c is not None
     await g.aclose()
     assert g._client is None and c.is_closed
+
+
+@respx.mock
+async def test_chat_once_returns_stripped_content_non_streaming():
+    route = respx.post(f"{URL}/v1/chat/completions").respond(
+        json={"choices": [{"message": {"content": "  Câu hỏi độc lập?\n"}}]}
+    )
+    assert await gw().chat_once([{"role": "user", "content": "x"}]) == "Câu hỏi độc lập?"
+    sent = json.loads(route.calls[0].request.content)
+    assert sent["stream"] is False and sent["max_tokens"] <= 256
+
+
+@respx.mock
+@pytest.mark.parametrize("payload", [{"choices": []}, {"x": 1}, {"choices": [{"message": {}}]}])
+async def test_chat_once_malformed_is_offline(payload):
+    respx.post(f"{URL}/v1/chat/completions").respond(json=payload)
+    with pytest.raises(LLMOffline):
+        await gw().chat_once([])
+
+
+@respx.mock
+async def test_injected_client_is_shared_and_not_closed_by_aclose():
+    respx.get(f"{URL}/health").respond(json={"status": "ok"})
+    async with httpx.AsyncClient() as shared:
+        g = gw(client=shared)
+        assert await g.health() is True
+        await g.aclose()
+        assert not shared.is_closed
