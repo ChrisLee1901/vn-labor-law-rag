@@ -1,15 +1,47 @@
-"""Chống lệch giữa docs/api-contract.md và code phát stream."""
+"""Chống lệch giữa docs/api-contract.md và code phát stream / routes."""
 
+import importlib.util
 import inspect
+import re
 from pathlib import Path
+
+import pytest
 
 from app import stream
 
 DOC = (Path(__file__).resolve().parents[2] / "docs" / "api-contract.md").read_text(encoding="utf-8")
-ROUTES = ["/api/chat", "/api/health", "/api/docs", "/api/feedback", "/api/cron/keepalive"]
+ENDPOINTS = {
+    ("POST", "/api/chat"),
+    ("GET", "/api/health"),
+    ("GET", "/api/docs"),
+    ("GET", "/api/docs/{code}"),
+    ("POST", "/api/feedback"),
+    ("GET", "/api/cron/keepalive"),
+}
+ORDER = (
+    "start → data-status → source-url* → text-start → text-delta* → text-end → "
+    "(data-citation-warning)? → data-trace → finish → [DONE]"
+)
 
 
-def _emitted_types() -> set[str]:
+def table_endpoints(doc: str) -> set[tuple[str, str]]:
+    """(METHOD, path) của các dòng bảng dạng `| POST | `/api/chat` | ...`."""
+    return set(re.findall(r"^\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(/api/[^`]*)`", doc, re.M))
+
+
+def missing_from_doc(doc: str) -> list[str]:
+    miss = [f"{m} {p}" for m, p in sorted(ENDPOINTS - table_endpoints(doc))]
+    if ORDER not in doc:
+        miss.append("part order line")
+    for t in sorted(emitted_types()):
+        if f"`{t}`" not in doc:
+            miss.append(f"part type {t}")
+    if "[DONE]" not in doc:
+        miss.append("[DONE]")
+    return miss
+
+
+def emitted_types() -> set[str]:
     types = set()
     for name, fn in inspect.getmembers(stream, inspect.isfunction):
         if fn.__module__ != stream.__name__ or name == "sse":
@@ -19,14 +51,25 @@ def _emitted_types() -> set[str]:
     return types
 
 
-def test_routes_documented():
-    for r in ROUTES:
-        assert r in DOC, r
+def test_contract_complete():
+    assert {"start", "data-status", "data-trace", "data-citation-warning", "source-url", "error", "finish"} <= emitted_types()
+    assert missing_from_doc(DOC) == []
 
 
-def test_stream_part_types_documented():
-    types = _emitted_types()
-    assert {"start", "data-status", "data-trace", "data-citation-warning", "source-url", "error", "finish"} <= types
-    for t in types:
-        assert f"`{t}`" in DOC, t
-    assert "[DONE]" in DOC
+def test_guard_detects_removed_docs_row():
+    broken = "\n".join(line for line in DOC.splitlines() if not re.match(r"^\|\s*GET\s*\|\s*`/api/docs`\s*\|", line))
+    assert missing_from_doc(broken) == ["GET /api/docs"]
+
+
+def test_guard_detects_changed_order():
+    assert "part order line" in missing_from_doc(DOC.replace(ORDER, "start → finish"))
+
+
+@pytest.mark.skipif(importlib.util.find_spec("app.main") is None, reason="app.main chưa có (Task 4.4)")
+def test_real_routes_in_contract():
+    from app.main import app
+
+    internal = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
+    paths = {r.path for r in app.routes if getattr(r, "methods", None) and r.path not in internal}
+    documented = {p for _, p in table_endpoints(DOC)}
+    assert paths <= documented, paths - documented

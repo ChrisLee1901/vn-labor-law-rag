@@ -33,8 +33,7 @@ Mỗi chunk là một dòng `data: <json>` kết thúc bằng dòng trống; str
 ### Thứ tự part
 
 ```
-start -> data-status -> source-url* -> text-start -> text-delta* -> text-end
-      -> data-citation-warning? -> data-trace -> finish -> [DONE]
+start → data-status → source-url* → text-start → text-delta* → text-end → (data-citation-warning)? → data-trace → finish → [DONE]
 ```
 
 Khi lỗi sau `start`: `error` rồi `[DONE]` (không có `finish`). Lỗi trước khi stream mở dùng mã HTTP và `{detail}` ở mục Lỗi.
@@ -195,6 +194,8 @@ Trả `{doc, articles}`. `doc` là `DocDetail`: các trường của `DocSummary
 | `content` | string | |
 | `kind` | `dieu`, `phu_luc` | Neo trang: `#D{n}` hoặc `#PL{n}` |
 
+Nullability: cột `doc_type`, `status`, `content` có thể NULL trong DB nhưng API đảm bảo không null: bản ghi văn bản có `doc_type` hoặc `status` NULL hoặc ngoài tập giá trị bên trên bị loại khỏi kết quả, `content` NULL được đổi thành chuỗi rỗng. Các trường còn lại ghi "hoặc null" ở trên có thể null thật.
+
 Mã không tồn tại: 404 `{"detail":"Không tìm thấy văn bản."}`.
 
 ## POST /api/feedback
@@ -215,9 +216,12 @@ Header bắt buộc: `Authorization: Bearer $CRON_SECRET`. Trả 204. Thiếu ho
 
 ## Lỗi
 
-| Mã | Khi nào | `detail` |
-|---|---|---|
-| 422 | Input sai (`/api/chat`, `/api/feedback`) | vd `Câu hỏi quá dài (tối đa 1000 ký tự).` |
-| 429 | Vượt giới hạn tần suất | `Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.` |
-| 503 | DB không khả dụng | `Cơ sở dữ liệu tạm thời không khả dụng, vui lòng thử lại sau.` |
-| 404 | `/api/docs/{code}` không tồn tại | `Không tìm thấy văn bản.` |
+| Mã | Endpoint | Khi nào | `detail` |
+|---|---|---|---|
+| 422 | `/api/chat`, `/api/feedback` | Input sai | vd `Câu hỏi quá dài (tối đa 1000 ký tự).` |
+| 429 | `/api/chat` (chỉ endpoint này) | Vượt giới hạn tần suất | `Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.` |
+| 503 | `/api/chat`, `/api/docs`, `/api/docs/{code}`, `/api/feedback` | DB không khả dụng | `Cơ sở dữ liệu tạm thời không khả dụng, vui lòng thử lại sau.` |
+| 404 | `/api/docs/{code}` | Mã không tồn tại | `Không tìm thấy văn bản.` |
+| 401 | `/api/cron/keepalive` | Thiếu hoặc sai `CRON_SECRET` | `Không được phép.` |
+
+`/api/health` không bao giờ trả 503: DB lỗi được báo bằng `db: "down"` với mã 200.

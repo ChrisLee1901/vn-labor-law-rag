@@ -9,7 +9,7 @@ Emitter: `backend/app/stream.py`. Each chunk is one SSE line `data: <json>\n\n`;
 
 Response headers: `x-vercel-ai-ui-message-stream: v1`, `content-type: text/event-stream`, `cache-control: no-cache`.
 
-Order emitted by `/api/chat`: `start -> data-status -> data-trace? -> source-url* -> text-start -> text-delta+ -> text-end -> data-citation-warning? -> finish -> [DONE]`. On failure: `error` then `[DONE]`.
+Order emitted by `/api/chat`: `start → data-status → source-url* → text-start → text-delta* → text-end → (data-citation-warning)? → data-trace → finish → [DONE]` (see `docs/api-contract.md`). On failure: `error` then `[DONE]`.
 
 | Builder | JSON |
 |---|---|
