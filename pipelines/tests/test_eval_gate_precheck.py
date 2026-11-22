@@ -1,12 +1,21 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 _spec = importlib.util.spec_from_file_location(
     "eval_gate_precheck",
     Path(__file__).parents[2] / "scripts" / "eval_gate_precheck.py",
 )
 pc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pc)
+
+
+@pytest.fixture(autouse=True)
+def _clean_github_env(monkeypatch):
+    """Runner đặt GITHUB_BASE_REF/GITHUB_OUTPUT cho mọi step của PR; test tự đặt lại thứ nó cần."""
+    monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
 
 
 def _touch(root: Path, *rels: str) -> None:
@@ -53,6 +62,8 @@ def _base_repo(root: Path, *rels: str) -> None:
             "user.name=t",
             "-c",
             "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "-q",
             "--allow-empty",
