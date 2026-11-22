@@ -64,14 +64,25 @@ Tiêu đề luôn đứng thẳng (không italic).
 - AI Elements bản shadcn không còn là gói riêng. `prompt-input`, `sources`, `inline-citation`, `suggestion` là mẫu ghép từ các thành phần trên: Task 5.2 tự ghép, nguồn mẫu ở https://ui.shadcn.com/docs/ai-elements/radix/<tên>.md.
 - `StatusBadge`, `SiteHeader`, `SiteFooter`, `ThemeToggle` ở `src/components/`.
 
+## Trang Hỏi đáp (Task 5.2)
+
+- Trả lời của trợ lý là chữ trần trên nền trang, không bong bóng, đo dòng `--measure` (68ch). Chỉ tin của người dùng nằm trong bong bóng `secondary` bo nhỏ. Không avatar.
+- `[S#]` là nút nhỏ nền `cite`, chữ `cite-foreground`, viền `cite-border`; nguồn đang xem gạch chân `cite-foreground`. Mã không có trong nguồn của tin đó là chữ `muted-foreground` thường, không phải nút.
+- Huy hiệu hiệu lực dùng bộ `status-*` sẵn có: đang hiệu lực = `status-online`, chưa hiệu lực = `status-offline` (xám), hết hiệu lực = `status-down`. Luôn có chữ, không chỉ màu.
+- Banner (ngoại tuyến, từ chối) là hộp `muted` viền `border`, chữ `muted-foreground`; chỉ lỗi dùng `destructive`. Cảnh báo trích dẫn là một dòng chữ phụ, không hộp.
+- Bố cục: ≥ lg hai cột (câu trả lời, panel nguồn 18rem dính khi cuộn); dưới lg panel là sheet đáy mở bằng "Nguồn (n)" hoặc bấm `[S#]`. Ô nhập dính đáy trang.
+- Thông báo cho trình đọc màn hình: vùng `role=status` chỉ đọc "Đã có câu trả lời mới." khi stream xong, nội dung đang stream không nằm trong vùng live (`aria-busy` trên danh sách).
+
 ## Dependencies
 
 - `cn` (npm, 0.5.2) thay cho `clsx` + `tailwind-merge`: giữ nguyên, vì đây là mặc định hiện tại của template shadcn. Đã kiểm tra chuỗi cung ứng: maintainer `shadcn`, repo `github.com/shadcn-ui/cn`, giấy phép MIT, không có script postinstall. Mã ứng dụng import `cn` từ `@/lib/utils` (file này re-export từ `"cn"`); các file sinh sẵn trong `components/ui/*` được phép import `"cn"` trực tiếp, không sửa tay.
 - `@shadcn/react` (do CLI thêm cho `message-scroller`): maintainer `shadcn`, repo `shadcn-ui/ui`.
 - `shadcn` (CLI) nằm ở devDependencies, chỉ cần lúc build cho `@import "shadcn/tailwind.css"`.
+- `ai` 7 và `@ai-sdk/react` 4 (`useChat`, `DefaultChatTransport`), `react-markdown` + `remark-gfm` (không dùng `rehype-raw`). Dev: `@testing-library/user-event`.
 - Node >= 22 (`engines`, `.nvmrc`), pnpm 11.22.0 (`packageManager`).
 
 ## Biến môi trường
 
 - `API_ORIGIN`: đích rewrite `/api/*`. Khi chạy `next dev` mặc định `http://127.0.0.1:8000`. Ở production không đặt thì không có rewrite (`vercel.json`, Task 6.3, định tuyến). Logic ở `src/lib/api-rewrites.ts`.
+- `NEXT_PUBLIC_MOCK_CHAT=1`: trang chat gọi `/api/mock/chat` (route dev, 404 khi `NODE_ENV=production`) thay cho `/api/chat`. Inlined lúc build.
 - `NEXT_PUBLIC_REPO_URL`: liên kết GitHub ở footer, ẩn khi không đặt.
