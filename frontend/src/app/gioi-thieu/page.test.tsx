@@ -16,13 +16,13 @@ const READY: EvalContent = {
   status: "ready",
   generatedAt: "2026-12-01T00:00:00.000Z",
   model: "Qwen3-8B Q5_K_M",
-  golden: { n_test: 80 },
+  retrieval: { n_queries: 68 },
   ablation: [
     { mode: "fts", hit_rate_at_1: 0.2, recall_at_5: 0.3, recall_at_10: 0.4, recall_at_20: 0.5, mrr_at_10: 0.25, ndcg_at_10: 0.3 },
     { mode: "hybrid", hit_rate_at_1: 0.41234, recall_at_5: 0.6, recall_at_10: 0.7, recall_at_20: 0.8, mrr_at_10: 0.5, ndcg_at_10: 0.55 },
   ],
-  answers: { citation_precision: 0.9, citation_recall: 0.8, numeric_match: 0.7, refusal_accuracy: 0.95, injection_resisted: 1 },
-  latency: { ttft_p50_s: 1.234, ttft_p95_s: 2.5, total_p50_s: 8, total_p95_s: 15.75 },
+  answers: { n_queries: 80, citation_precision: 0.9, citation_recall: 0.8, numeric_match: 0.7, refusal_accuracy: 0.95, injection_resisted: 1 },
+  latency: { n_queries: 40, ttft_p50_s: 1.234, ttft_p95_s: 2.5, total_p50_s: 8, total_p95_s: 15.75 },
 };
 
 afterEach(() => {
@@ -35,6 +35,9 @@ describe("/gioi-thieu", () => {
     render(<AboutPage />);
     expect(screen.getByText("Kết quả đánh giá sẽ được công bố sau lần chạy đầu tiên khi mô hình trực tuyến.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
+    // answer/latency metric definitions are provisional: hidden until real results carry them
+    for (const t of [/Độ chính xác: trong các/, /Khớp số liệu/, /Từ chối đúng/, /Chống injection/, /TTFT là thời gian/]) expect(screen.queryByText(t)).toBeNull();
+    expect(screen.getByText(/Tỷ lệ Điều đúng \(gold\) nằm trong k kết quả đầu/)).toBeInTheDocument();
     expect(screen.getByText(/Bộ câu hỏi vàng gồm 120 câu/)).toBeInTheDocument();
     expect(screen.getByText(/chưa có người kiểm/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Kết quả đánh giá" })).toBeInTheDocument();
@@ -68,14 +71,23 @@ describe("/gioi-thieu", () => {
     expect(within(latency).getByText("15.75 s")).toBeInTheDocument();
     const answers = screen.getByRole("table", { name: /Chất lượng câu trả lời/ });
     expect(within(answers).getByText("0.950")).toBeInTheDocument();
-    expect(screen.getByText(/80 câu thuộc split test/)).toBeInTheDocument();
-    expect(screen.getByText(/mô hình sinh câu trả lời Qwen3-8B Q5_K_M/)).toBeInTheDocument();
+    // mỗi khối ghi số câu của chính nó, truy xuất chỉ đếm câu có gold
+    expect(within(ablation).getByText(/68 câu có đáp án \(gold\) trong split test/)).toBeInTheDocument();
+    expect(within(answers).getByText(/80 câu trong split test/)).toBeInTheDocument();
+    expect(within(latency).getByText(/40 câu trong split test/)).toBeInTheDocument();
+    expect(screen.getByText(/Độ chính xác: trong các \[S#\]/)).toBeInTheDocument();
+    expect(screen.getByText(/TTFT là thời gian tới token đầu tiên/)).toBeInTheDocument();
+    expect(screen.getByText(/Mô hình sinh câu trả lời: Qwen3-8B Q5_K_M/)).toBeInTheDocument();
   });
 
   it("omits the answer and latency blocks when the run had no such data", () => {
-    state.value = { status: "ready", golden: { n_test: 80 }, ablation: READY.ablation };
+    state.value = { status: "ready", retrieval: { n_queries: 68 }, ablation: READY.ablation };
     render(<AboutPage />);
     expect(screen.getAllByRole("table")).toHaveLength(1);
+    // retrieval-only run: no glossary rows for metrics that were not produced
+    expect(screen.getByText(/Tỷ lệ Điều đúng \(gold\) nằm trong k kết quả đầu/)).toBeInTheDocument();
+    expect(screen.queryByText(/Độ chính xác: trong các/)).toBeNull();
+    expect(screen.queryByText(/TTFT là thời gian/)).toBeNull();
   });
 
   it("links to the repo only when NEXT_PUBLIC_REPO_URL is set", () => {
