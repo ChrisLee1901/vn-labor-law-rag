@@ -23,6 +23,7 @@ class Gateway:
         self.base_url = base_url.rstrip("/") if base_url else None
         self.api_key = api_key
         self.allow_any = allow_any
+        self._client: httpx.AsyncClient | None = None
 
     def is_allowed(self, url: str | None = None) -> bool:
         return bool(url) and _ALLOWED.match(url) is not None  # type: ignore[arg-type]
@@ -36,54 +37,85 @@ class Gateway:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}"}
 
+    def _http(self) -> httpx.AsyncClient:
+        # Một client/Gateway: tái dùng kết nối (tránh bắt tay TLS lại mỗi call qua ngrok). Gọi aclose() khi xong.
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=_TIMEOUT)
+        return self._client
+
+    async def aclose(self) -> None:
+        c, self._client = self._client, None
+        if c is not None:
+            await c.aclose()
+
     async def _post(self, path: str, body: dict) -> dict:
         url = self._url(path)
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-                r = await c.post(url, json=body, headers=self._headers)
+            r = await self._http().post(url, json=body, headers=self._headers)
             r.raise_for_status()
             return r.json()
         except (httpx.HTTPError, ValueError) as e:
             raise LLMOffline(str(e)) from e
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        data = (await self._post("/v1/embeddings", {"input": texts}))["data"]
-        return [d["embedding"] for d in sorted(data, key=lambda d: d["index"])]
+        res = await self._post("/v1/embeddings", {"input": texts})
+        try:
+            vecs = [d["embedding"] for d in sorted(res["data"], key=lambda d: d["index"])]
+        except (KeyError, TypeError) as e:
+            raise LLMOffline(f"malformed embeddings response: {e!r}") from e
+        if len(vecs) != len(texts):
+            raise LLMOffline("embeddings count mismatch")
+        return vecs
 
     async def rerank(self, query: str, docs: list[str], top_n: int) -> list[tuple[int, float]]:
-        res = (await self._post("/v1/rerank", {"query": query, "documents": docs, "top_n": top_n}))["results"]
-        return [(r["index"], r["relevance_score"]) for r in res]
+        res = await self._post("/v1/rerank", {"query": query, "documents": docs, "top_n": top_n})
+        try:
+            out = [(int(r["index"]), float(r["relevance_score"])) for r in res["results"]]
+        except (KeyError, TypeError, ValueError) as e:
+            raise LLMOffline(f"malformed rerank response: {e!r}") from e
+        if any(not 0 <= i < len(docs) for i, _ in out):
+            raise LLMOffline("rerank index out of range")
+        return out
 
     async def health(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-                r = await c.get(self._url("/health"))
+            r = await self._http().get(self._url("/health"))
             return r.status_code == 200 and r.json().get("status") == "ok"
-        except (LLMOffline, httpx.HTTPError, ValueError):
+        except (LLMOffline, httpx.HTTPError, ValueError, AttributeError):
             return False
 
     async def chat_stream(self, messages: list[dict]) -> AsyncIterator[str]:
-        """Yield text deltas. LLMOffline nếu không kết nối/HTTP lỗi trước byte đầu; LLMStreamError nếu đứt giữa chừng."""
+        """Yield text deltas. LLMOffline nếu không kết nối/HTTP lỗi trước byte đầu; LLMStreamError nếu stream đứt,
+        có `error` trong luồng, hoặc kết thúc mà không có `[DONE]` (câu trả lời cụt)."""
         url = self._url("/v1/chat/completions")
         body = {"messages": messages, "stream": True}
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-                async with c.stream("POST", url, json=body, headers=self._headers) as r:
-                    r.raise_for_status()
-                    try:
-                        async for line in r.aiter_lines():
-                            if not line.startswith("data:"):
-                                continue
-                            data = line[5:].strip()
-                            if data == "[DONE]":
-                                return
-                            try:
-                                delta = json.loads(data)["choices"][0]["delta"].get("content")
-                            except (ValueError, KeyError, IndexError, TypeError):
-                                continue
-                            if delta:
-                                yield delta
-                    except httpx.HTTPError as e:
-                        raise LLMStreamError(str(e)) from e
+            async with self._http().stream("POST", url, json=body, headers=self._headers) as r:
+                r.raise_for_status()
+                done = False
+                try:
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            done = True
+                            break
+                        try:
+                            obj = json.loads(data)
+                        except ValueError:
+                            continue
+                        if isinstance(obj, dict) and "error" in obj:
+                            raise LLMStreamError(str(obj["error"]))
+                        try:
+                            delta = obj["choices"][0]["delta"].get("content")
+                        except (KeyError, IndexError, TypeError, AttributeError):
+                            continue
+                        if delta:
+                            yield delta
+                except httpx.HTTPError as e:
+                    raise LLMStreamError(str(e)) from e
+                if not done:
+                    raise LLMStreamError("stream ended without [DONE]")
         except httpx.HTTPError as e:
             raise LLMOffline(str(e)) from e

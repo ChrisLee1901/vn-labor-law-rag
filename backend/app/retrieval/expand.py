@@ -56,7 +56,7 @@ async def expand(
            join legal_refs r on r.index_version = %s
              and (r.src_id = p.id or starts_with(r.src_id, p.id || ':') or starts_with(r.src_id, p.id || '#'))
            where r.dst_doc_code is not null and r.dst_article is not null
-           order by p.ord, r.src_id, r.dst_doc_code, r.dst_article""",
+           order by p.ord, substring(r.src_id from ':K([0-9]+)')::int nulls first, r.src_id, r.dst_doc_code, r.dst_article""",
         (parents, index_version),
     )
     # (b) Điều của văn bản khác có khoản 'details' trỏ vào parent (nghị định hướng dẫn Điều của luật).
@@ -66,7 +66,7 @@ async def expand(
             from unnest(%s::text[]) with ordinality p(id, ord)
             join legal_refs r on r.index_version = %s and r.rel = 'details'
               and r.dst_doc_code || ':D' || r.dst_article = p.id
-            order by p.ord, r.src_id""",
+            order by p.ord, substring(r.src_id from ':D([0-9]+)')::int nulls last, r.src_id""",
         (parents, index_version),
     )
     extra_ids = [i for i in dict.fromkeys([make_id(c, a) for c, a in fwd] + [r[0] for r in rev]) if i not in by_id]

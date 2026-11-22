@@ -66,3 +66,15 @@ async def test_expand_parent_not_duplicated_as_extra_and_appendix(aconn):
     out = await expand(["LVL-2025:D47", "LBHXH-2024:D33", "LVL-2025:PL1"], aconn, 1, AS_OF)
     assert [d.id for d in out[:3]] == ["LVL-2025:D47", "LBHXH-2024:D33", "LVL-2025:PL1"]
     assert len([d for d in out if d.id == "LVL-2025:D47"]) == 1
+
+
+async def test_expand_forward_refs_ordered_numerically(sync_conn, aconn):
+    c = sync_conn
+    c.execute("insert into legal_docs(code, number, effective_from) values ('NUM-1','9/2025/QH15','2025-01-01')")
+    for a in (2, 10):
+        c.execute("insert into articles(index_version, id, doc_code, number, content) values (1, %s, 'NUM-1', %s, 'x')", (f"NUM-1:D{a}", a))
+    c.execute("insert into articles(index_version, id, doc_code, number, content) values (1, 'NUM-1:D20', 'NUM-1', 20, 'x')")
+    for src, art in (("NUM-1:D20:K10", 10), ("NUM-1:D20:K2", 2)):
+        c.execute("insert into legal_refs(index_version, src_id, dst_doc_code, dst_article, rel) values (1, %s, 'NUM-1', %s, 'cites')", (src, art))
+    out = await expand(["NUM-1:D20"], aconn, 1, AS_OF)
+    assert [d.id for d in out] == ["NUM-1:D20", "NUM-1:D2", "NUM-1:D10"]

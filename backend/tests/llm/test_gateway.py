@@ -114,3 +114,47 @@ async def test_chat_stream_connect_failure_offline():
 async def test_allow_any_for_tests():
     respx.get("http://local.test/health").respond(json={"status": "ok"})
     assert await Gateway("http://local.test", "k", allow_any=True).health() is True
+
+
+@respx.mock
+async def test_chat_stream_inband_error_raises():
+    body = sse('{"choices":[{"delta":{"content":"a"}}]}', '{"error":{"message":"oom"}}')
+    respx.post(f"{URL}/v1/chat/completions").respond(content=body)
+    got = []
+    with pytest.raises(LLMStreamError):
+        async for d in gw().chat_stream([]):
+            got.append(d)
+    assert got == ["a"]
+
+
+@respx.mock
+async def test_chat_stream_without_done_is_error():
+    respx.post(f"{URL}/v1/chat/completions").respond(content=sse('{"choices":[{"delta":{"content":"a"}}]}'))
+    with pytest.raises(LLMStreamError):
+        async for _ in gw().chat_stream([]):
+            pass
+
+
+@respx.mock
+async def test_malformed_json_is_offline():
+    respx.post(f"{URL}/v1/embeddings").respond(json={"nope": 1})
+    with pytest.raises(LLMOffline):
+        await gw().embed(["a"])
+    respx.post(f"{URL}/v1/rerank").respond(json={"results": [{"index": 5, "relevance_score": 0.5}]})
+    with pytest.raises(LLMOffline):
+        await gw().rerank("q", ["a"], 1)
+    respx.post(f"{URL}/v1/rerank").respond(json={"results": [{"index": 0}]})
+    with pytest.raises(LLMOffline):
+        await gw().rerank("q", ["a"], 1)
+
+
+@respx.mock
+async def test_client_reused_and_closed():
+    respx.post(f"{URL}/v1/rerank").respond(json={"results": []})
+    g = gw()
+    await g.rerank("q", ["a"], 1)
+    c = g._client
+    await g.rerank("q", ["a"], 1)
+    assert g._client is c and c is not None
+    await g.aclose()
+    assert g._client is None and c.is_closed
