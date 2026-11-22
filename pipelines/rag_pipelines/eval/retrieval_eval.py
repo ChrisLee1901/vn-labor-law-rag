@@ -11,6 +11,7 @@ Chạy: python -m rag_pipelines.eval.retrieval_eval --index eval/index/v1.parque
 - Chỉ tính các câu có gold. `--compare`: exit 1 nếu recall@10 hoặc mrr@10 của mode `hybrid` giảm quá `--max-drop` (tuyệt đối).
 - Cache: eval/cache/query_emb_<model>.npy + .ids.json; thiếu id -> báo "chạy --refresh-cache khi Kaggle bật".
 """
+
 import argparse
 import asyncio
 import hashlib
@@ -52,21 +53,43 @@ def _dedupe(ids: list[str]) -> list[str]:
     return list(dict.fromkeys(article_of(i) for i in ids))
 
 
-def compute_metrics(run: dict[str, list[str]], gold: dict[str, list[str]]) -> dict[str, float]:
+def compute_metrics(
+    run: dict[str, list[str]], gold: dict[str, list[str]]
+) -> dict[str, float]:
     qrels = Qrels.from_dict({q: {a: 1 for a in _dedupe(g)} for q, g in gold.items()})
-    ranked = {q: _dedupe(run.get(q, []))[:TOP] or ["__none__"] for q in gold}  # ranx cần mỗi query có ít nhất 1 tài liệu
-    r = Run.from_dict({q: {a: float(len(ids) - n) for n, a in enumerate(ids)} for q, ids in ranked.items()})
-    return {k: float(v) for k, v in evaluate(qrels, r, METRICS, make_comparable=False).items()}
+    ranked = {
+        q: _dedupe(run.get(q, []))[:TOP] or ["__none__"] for q in gold
+    }  # ranx cần mỗi query có ít nhất 1 tài liệu
+    r = Run.from_dict(
+        {
+            q: {a: float(len(ids) - n) for n, a in enumerate(ids)}
+            for q, ids in ranked.items()
+        }
+    )
+    return {
+        k: float(v)
+        for k, v in evaluate(qrels, r, METRICS, make_comparable=False).items()
+    }
 
 
 def gate(current: dict, baseline: dict, max_drop: float) -> int:
     """0 = đạt. Fail khi không so sánh được (thiếu hybrid, khác split/n_queries) hoặc recall@10 / mrr@10 của hybrid giảm quá ngưỡng."""
-    bad = [f"cannot compare: `{k}` is {baseline.get(k)!r} in baseline vs {current.get(k)!r} now (regenerate the baseline)"
-           for k in ("split", "n_queries") if baseline.get(k) != current.get(k)]
-    bad += [f"cannot compare: mode `hybrid` missing in {name}" for name, r in (("current run", current), ("baseline", baseline)) if "hybrid" not in r]
+    bad = [
+        f"cannot compare: `{k}` is {baseline.get(k)!r} in baseline vs {current.get(k)!r} now (regenerate the baseline)"
+        for k in ("split", "n_queries")
+        if baseline.get(k) != current.get(k)
+    ]
+    bad += [
+        f"cannot compare: mode `hybrid` missing in {name}"
+        for name, r in (("current run", current), ("baseline", baseline))
+        if "hybrid" not in r
+    ]
     if not bad:
-        bad = [f"hybrid {m}: {baseline['hybrid'][m]:.4f} -> {current['hybrid'][m]:.4f} (max drop {max_drop})"
-               for m in GATED if baseline["hybrid"][m] - current["hybrid"][m] > max_drop + 1e-9]
+        bad = [
+            f"hybrid {m}: {baseline['hybrid'][m]:.4f} -> {current['hybrid'][m]:.4f} (max drop {max_drop})"
+            for m in GATED
+            if baseline["hybrid"][m] - current["hybrid"][m] > max_drop + 1e-9
+        ]
     for b in bad:
         print(f"REGRESSION: {b}", file=sys.stderr)
     return 1 if bad else 0
@@ -74,15 +97,26 @@ def gate(current: dict, baseline: dict, max_drop: float) -> int:
 
 def markdown(res: dict) -> str:
     modes = [m for m in MODES if m in res]
-    lines = [f"Index `{res['index']}`, split `{res['split']}`, n={res['n_queries']}", "",
-             "| mode | " + " | ".join(METRICS) + " |", "|---|" + "---|" * len(METRICS)]
-    lines += [f"| {m} | " + " | ".join(f"{res[m][k]:.3f}" for k in METRICS) + " |" for m in modes]
+    lines = [
+        f"Index `{res['index']}`, split `{res['split']}`, n={res['n_queries']}",
+        "",
+        "| mode | " + " | ".join(METRICS) + " |",
+        "|---|" + "---|" * len(METRICS),
+    ]
+    lines += [
+        f"| {m} | " + " | ".join(f"{res[m][k]:.3f}" for k in METRICS) + " |"
+        for m in modes
+    ]
     if "hybrid_rerank" in modes:
-        lines += ["", "hybrid_rerank trả tối đa 6 Điều cha (đúng như API), nên recall@10/20 của dòng này xấp xỉ recall@6, không so trực tiếp với các mode khác."]
+        lines += [
+            "",
+            "hybrid_rerank trả tối đa 6 Điều cha (đúng như API), nên recall@10/20 của dòng này xấp xỉ recall@6, không so trực tiếp với các mode khác.",
+        ]
     return "\n".join(lines) + "\n"
 
 
 # ---- cache embedding câu hỏi ----
+
 
 def cache_base(model: str) -> Path:
     return ROOT / "eval/cache" / f"query_emb_{model.replace('/', '-')}"
@@ -92,11 +126,19 @@ def _sha(q: str) -> str:
     return hashlib.sha1(q.encode("utf-8")).hexdigest()
 
 
-def write_cache(base: Path, items: list[GoldItem], vecs: list[list[float]], model: str) -> None:
+def write_cache(
+    base: Path, items: list[GoldItem], vecs: list[list[float]], model: str
+) -> None:
     base.parent.mkdir(parents=True, exist_ok=True)
     np.save(base.with_suffix(".npy"), np.asarray(vecs, dtype=np.float32))
-    meta = {"model": model, "ids": [g.id for g in items], "sha1": [_sha(g.question) for g in items]}
-    base.with_suffix(".ids.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    meta = {
+        "model": model,
+        "ids": [g.id for g in items],
+        "sha1": [_sha(g.question) for g in items],
+    }
+    base.with_suffix(".ids.json").write_text(
+        json.dumps(meta, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def load_cache(base: Path, items: list[GoldItem], model: str) -> dict[str, list[float]]:
@@ -108,13 +150,18 @@ def load_cache(base: Path, items: list[GoldItem], model: str) -> dict[str, list[
     if not isinstance(meta, dict) or meta.get("model") != model:
         raise ValueError(f"cache không khớp model {model}: {MISS}")
     row = {i: n for n, i in enumerate(meta["ids"])}
-    if bad := [g.id for g in items if g.id not in row or meta["sha1"][row[g.id]] != _sha(g.question)]:
+    if bad := [
+        g.id
+        for g in items
+        if g.id not in row or meta["sha1"][row[g.id]] != _sha(g.question)
+    ]:
         raise ValueError(f"cache thiếu hoặc lỗi thời cho {bad[:5]}: {MISS}")
     m = np.load(npy)
     return {g.id: m[row[g.id]].tolist() for g in items}
 
 
 # ---- truy xuất ----
+
 
 def run_async(coro):
     """psycopg async cần selector loop (Windows mặc định là Proactor)."""
@@ -134,24 +181,56 @@ class StrictGateway(Gateway):
             raise GatewayLost(f"gateway offline during hybrid_rerank eval: {e}") from e
 
 
-async def _dense(conn, question: str, as_of: date, version: int, vec: list[float]) -> list[tuple[str, str, float]]:
+async def _dense(
+    conn, question: str, as_of: date, version: int, vec: list[float]
+) -> list[tuple[str, str, float]]:
     qe = "[" + ",".join(map(str, vec)) + "]"
     cur = await conn.execute(
         "select id, parent_id, score from hybrid_search(%s::text, %s::text, %s::halfvec, %s, %s::date, %s, 0, 1)",
-        (build_tsquery(question), build_tsquery(strip_diacritics(question)), qe, version, as_of, CANDIDATES))
+        (
+            build_tsquery(question),
+            build_tsquery(strip_diacritics(question)),
+            qe,
+            version,
+            as_of,
+            CANDIDATES,
+        ),
+    )
     return await cur.fetchall()
 
 
-async def search(conn, it: GoldItem, mode: str, vec: list[float] | None, gw: Gateway | None, version: int) -> list[str]:
+async def search(
+    conn,
+    it: GoldItem,
+    mode: str,
+    vec: list[float] | None,
+    gw: Gateway | None,
+    version: int,
+) -> list[str]:
     as_of = date.fromisoformat(it.as_of)
     if mode == "hybrid_rerank":
-        return [c.parent_id for c in await retrieve(it.question, as_of, gw, conn, version, online=True)]
-    rows = await (_dense(conn, it.question, as_of, version, vec) if mode == "dense" else _hybrid(conn, it.question, as_of, version, vec if mode == "hybrid" else None))
+        return [
+            c.parent_id
+            for c in await retrieve(it.question, as_of, gw, conn, version, online=True)
+        ]
+    rows = await (
+        _dense(conn, it.question, as_of, version, vec)
+        if mode == "dense"
+        else _hybrid(
+            conn, it.question, as_of, version, vec if mode == "hybrid" else None
+        )
+    )
     return [c.parent_id for c in _by_rrf(rows)]
 
 
-async def run_modes(db_url: str, version: int, items: list[GoldItem], modes: list[str], vecs: dict[str, list[float]],
-                    gw: Gateway | None) -> dict[str, dict[str, list[str]]]:
+async def run_modes(
+    db_url: str,
+    version: int,
+    items: list[GoldItem],
+    modes: list[str],
+    vecs: dict[str, list[float]],
+    gw: Gateway | None,
+) -> dict[str, dict[str, list[str]]]:
     out: dict[str, dict[str, list[str]]] = {m: {} for m in modes}
     async with await AsyncConnection.connect(db_url, autocommit=True) as conn:
         for m in modes:
@@ -164,7 +243,9 @@ async def _ready(gw: Gateway) -> bool:
     try:
         return await gw.health()
     finally:
-        await gw.aclose()  # client gắn với loop này; run_modes sẽ tạo lại trong loop của nó
+        await (
+            gw.aclose()
+        )  # client gắn với loop này; run_modes sẽ tạo lại trong loop của nó
 
 
 def refresh_cache(golden: list[GoldItem], model: str) -> None:
@@ -174,7 +255,10 @@ def refresh_cache(golden: list[GoldItem], model: str) -> None:
     finally:
         emb.close()
     write_cache(cache_base(model), golden, vecs, model)
-    print(f"cache: {len(golden)} câu -> {cache_base(model).with_suffix('.npy')}", file=sys.stderr)
+    print(
+        f"cache: {len(golden)} câu -> {cache_base(model).with_suffix('.npy')}",
+        file=sys.stderr,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -219,10 +303,17 @@ def main(argv: list[str] | None = None) -> int:
         base = os.environ.get("LLM_BASE_URL")
         gw = StrictGateway(base, os.environ.get("LLM_API_KEY", "")) if base else None
         if gw is None or not run_async(_ready(gw)):
-            print("skip hybrid_rerank: LLM_BASE_URL chưa đặt hoặc gateway không sẵn sàng", file=sys.stderr)
+            print(
+                "skip hybrid_rerank: LLM_BASE_URL chưa đặt hoặc gateway không sẵn sàng",
+                file=sys.stderr,
+            )
             modes.remove("hybrid_rerank")
     try:
-        vecs = load_cache(cache_base(a.embed_model), items, a.embed_model) if {"dense", "hybrid"} & set(modes) else {}
+        vecs = (
+            load_cache(cache_base(a.embed_model), items, a.embed_model)
+            if {"dense", "hybrid"} & set(modes)
+            else {}
+        )
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -247,7 +338,9 @@ def main(argv: list[str] | None = None) -> int:
         a.markdown.write_text(md, encoding="utf-8")
     if a.out:
         a.out.parent.mkdir(parents=True, exist_ok=True)
-        a.out.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+        a.out.write_text(
+            json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     return gate(res, baseline, a.max_drop) if baseline is not None else 0
 
 

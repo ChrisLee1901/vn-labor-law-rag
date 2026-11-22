@@ -4,6 +4,7 @@ Chạy: python -m rag_pipelines.eval.load_frozen --index eval/index/v1.parquet -
 Giả định schema đã có (migration áp trước). Idempotent: xóa chunks/articles/legal_refs của version đó rồi chèn lại,
 legal_docs upsert. Từ chối DB không phải localhost (lệnh này ghi đè version và đổi active) trừ khi --allow-remote.
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -22,7 +23,10 @@ def _rows(path: Path) -> tuple[list[str], list[dict]]:
 
 
 def _insert(cur: psycopg.Cursor, table: str, cols: list[str], rows: list[dict]) -> None:
-    cur.executemany(f"insert into {table} ({', '.join(cols)}) values ({', '.join(['%s'] * len(cols))})", [[r[c] for c in cols] for r in rows])
+    cur.executemany(
+        f"insert into {table} ({', '.join(cols)}) values ({', '.join(['%s'] * len(cols))})",
+        [[r[c] for c in cols] for r in rows],
+    )
 
 
 def load_frozen(index_path: str | Path, conn: psycopg.Connection) -> int:
@@ -39,23 +43,50 @@ def load_frozen(index_path: str | Path, conn: psycopg.Connection) -> int:
         sets = ", ".join(f"{c} = excluded.{c}" for c in docs_cols if c != "code")
         cur.executemany(
             f"insert into legal_docs ({', '.join(docs_cols)}) values ({', '.join(['%s'] * len(docs_cols))}) on conflict (code) do update set {sets}",
-            [[None if c == "replaced_by" else d[c] for c in docs_cols] for d in docs])  # replaced_by FK: đặt sau khi đủ văn bản
-        cur.executemany("update legal_docs set replaced_by = %s where code = %s", [(d["replaced_by"], d["code"]) for d in docs if d["replaced_by"]])
+            [[None if c == "replaced_by" else d[c] for c in docs_cols] for d in docs],
+        )  # replaced_by FK: đặt sau khi đủ văn bản
+        cur.executemany(
+            "update legal_docs set replaced_by = %s where code = %s",
+            [(d["replaced_by"], d["code"]) for d in docs if d["replaced_by"]],
+        )
         _insert(cur, "articles", art_cols, arts)
         cur.executemany(
             "insert into chunks (index_version, id, parent_id, doc_code, article, clause, point, content, embed_text, embedding, fts_noaccent) "
             "values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::halfvec, to_tsvector('simple', %s))",
-            [(version, c["id"], c["parent_id"], c["doc_code"], c["article"], c["clause"], c["point"], c["content"], c["embed_text"],
-              "[" + ",".join(f"{x:.7g}" for x in np.asarray(c["embedding"], dtype=np.float32)) + "]", strip_diacritics(c["embed_text"]))
-             for c in chunks])
+            [
+                (
+                    version,
+                    c["id"],
+                    c["parent_id"],
+                    c["doc_code"],
+                    c["article"],
+                    c["clause"],
+                    c["point"],
+                    c["content"],
+                    c["embed_text"],
+                    "["
+                    + ",".join(
+                        f"{x:.7g}" for x in np.asarray(c["embedding"], dtype=np.float32)
+                    )
+                    + "]",
+                    strip_diacritics(c["embed_text"]),
+                )
+                for c in chunks
+            ],
+        )
         _insert(cur, "legal_refs", ref_cols, refs)
-        cur.execute("update app_config set value = %s, updated_at = now() where key = 'active_index_version'", (Jsonb(version),))
+        cur.execute(
+            "update app_config set value = %s, updated_at = now() where key = 'active_index_version'",
+            (Jsonb(version),),
+        )
     return version
 
 
 def ensure_local(url: str) -> None:
     if conninfo_to_dict(url).get("host") not in (None, "localhost", "127.0.0.1", "::1"):
-        raise SystemExit("refusing: load_frozen overwrites an index version and switches active_index_version; DB is not local (--allow-remote to override)")
+        raise SystemExit(
+            "refusing: load_frozen overwrites an index version and switches active_index_version; DB is not local (--allow-remote to override)"
+        )
 
 
 def main() -> int:

@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from rag_pipelines import download
 from rag_pipelines.download import parse_file_links
 
 FIXTURE = Path(__file__).parent / "fixtures" / "congbao_page.html"
@@ -16,10 +19,6 @@ def test_parse_file_links_prefers_docx_then_doc_then_pdf():
     assert exts == sorted(exts, key=["docx", "doc", "pdf"].index)
 
 
-import pytest
-
-from rag_pipelines import download
-
 PDF = b"%PDF-1.4 x"
 
 
@@ -35,7 +34,9 @@ def test_parse_file_links_drops_foreign_hosts():
         '<a href="https://evil.example.com/a.pdf">x</a>'
         '<a href="https://g7.cdnchinhphu.vn/api/download/stream?Url=x&amp;file_name=a.doc">ok</a>'
     )
-    assert download.parse_file_links(html) == ["https://g7.cdnchinhphu.vn/api/download/stream?Url=x&file_name=a.doc"]
+    assert download.parse_file_links(html) == [
+        "https://g7.cdnchinhphu.vn/api/download/stream?Url=x&file_name=a.doc"
+    ]
 
 
 def test_run_raises_when_no_links(tmp_path, monkeypatch):
@@ -47,18 +48,23 @@ def test_run_raises_when_no_links(tmp_path, monkeypatch):
 
 def test_run_rejects_unexpected_extension(tmp_path, monkeypatch):
     monkeypatch.setattr(download, "_get", lambda url: b"x")
-    y = _yaml(tmp_path, "  - {code: X2, files: ['https://datafiles.chinhphu.vn/a.zip']}\n")
+    y = _yaml(
+        tmp_path, "  - {code: X2, files: ['https://datafiles.chinhphu.vn/a.zip']}\n"
+    )
     with pytest.raises(ValueError, match="zip"):
         download.run(y, tmp_path / "raw", tmp_path / "m.json")
 
 
 def test_run_skips_rewrite_when_sha_matches(tmp_path, monkeypatch):
     monkeypatch.setattr(download, "_get", lambda url: PDF)
-    y = _yaml(tmp_path, "  - {code: X3, files: ['https://datafiles.chinhphu.vn/a.pdf']}\n")
+    y = _yaml(
+        tmp_path, "  - {code: X3, files: ['https://datafiles.chinhphu.vn/a.pdf']}\n"
+    )
     download.run(y, tmp_path / "raw", tmp_path / "m.json")
     f = tmp_path / "raw" / "X3" / "X3.part1.pdf"
     f.write_bytes(PDF)  # same bytes
     import os
+
     os.utime(f, ns=(1_000_000_000, 1_000_000_000))
     download.run(y, tmp_path / "raw", tmp_path / "m.json")
     assert f.stat().st_mtime_ns == 1_000_000_000

@@ -1,4 +1,5 @@
 """Che thông tin cá nhân trước khi ghi trace."""
+
 import re
 
 MASK = "[đã ẩn]"

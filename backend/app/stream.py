@@ -19,7 +19,13 @@ STREAM_HEADERS = {
 
 
 def sse(part: dict) -> bytes:
-    return b"data: " + json.dumps(part, ensure_ascii=False, separators=(",", ":")).encode("utf-8", errors="replace") + b"\n\n"
+    return (
+        b"data: "
+        + json.dumps(part, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8", errors="replace"
+        )
+        + b"\n\n"
+    )
 
 
 def start(message_id: str) -> dict:
@@ -51,7 +57,10 @@ def data_trace(trace_id: str) -> dict:
 
 
 def data_citation_warning(invalid: list[str], mismatch: list[str]) -> dict:
-    return {"type": "data-citation-warning", "data": {"invalid": invalid, "mismatch": mismatch}}
+    return {
+        "type": "data-citation-warning",
+        "data": {"invalid": invalid, "mismatch": mismatch},
+    }
 
 
 def error(text: str) -> dict:

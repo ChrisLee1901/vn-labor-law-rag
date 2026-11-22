@@ -1,5 +1,6 @@
 """Dump corpus đã parse ra markdown cho bước sinh golden set.
 Chạy: python -m rag_pipelines.eval.dump_corpus [--out eval/golden/_work]"""
+
 import argparse
 import sys
 from pathlib import Path
@@ -15,10 +16,21 @@ def _texts(code: str, a):
     aid = make_id(code, a.number, suffix=a.suffix)
     yield aid, a.intro
     for c in a.clauses:
-        cid = make_id(code, a.number, c.number, suffix=a.suffix) if c.number is not None else aid
+        cid = (
+            make_id(code, a.number, c.number, suffix=a.suffix)
+            if c.number is not None
+            else aid
+        )
         yield cid, c.text
         for p in c.points:
-            yield (make_id(code, a.number, c.number, p.letter, a.suffix) if c.number is not None else cid), p.text
+            yield (
+                (
+                    make_id(code, a.number, c.number, p.letter, a.suffix)
+                    if c.number is not None
+                    else cid
+                ),
+                p.text,
+            )
 
 
 def dump(out: Path, codes: list[str] | None = None) -> dict[str, int]:
@@ -39,20 +51,37 @@ def dump(out: Path, codes: list[str] | None = None) -> dict[str, int]:
                     if c.text:
                         lines.append(c.text)
                 else:
-                    lines.append(f"[{make_id(code, a.number, c.number, suffix=a.suffix)}] {c.text}")
+                    lines.append(
+                        f"[{make_id(code, a.number, c.number, suffix=a.suffix)}] {c.text}"
+                    )
                 for p in c.points:
-                    pid = make_id(code, a.number, c.number, p.letter, a.suffix) if c.number is not None else aid
+                    pid = (
+                        make_id(code, a.number, c.number, p.letter, a.suffix)
+                        if c.number is not None
+                        else aid
+                    )
                     lines.append(f"[{pid}] {p.letter}) {p.text}")
             lines.append("")
             for src, text in _texts(code, a):
                 for r in extract_refs(text, self_doc=code):
-                    if r.explicit_doc and r.dst_doc_code and r.dst_doc_code != code and r.article is not None:
+                    if (
+                        r.explicit_doc
+                        and r.dst_doc_code
+                        and r.dst_doc_code != code
+                        and r.article is not None
+                    ):
                         dst = make_id(r.dst_doc_code, r.article)
                         if dst in ids:
                             pairs.setdefault(f"{src} -> {dst} ({r.rel})")
         for ap in apps:
-            lines += [f"## {make_appendix_id(code, ap.number)} — Phụ lục {ap.number}. {ap.title}", ""]
-            lines += [f"[{make_appendix_id(code, ap.number, n)}] {head}: {body}" for n, head, body in ap.items]
+            lines += [
+                f"## {make_appendix_id(code, ap.number)} — Phụ lục {ap.number}. {ap.title}",
+                "",
+            ]
+            lines += [
+                f"[{make_appendix_id(code, ap.number, n)}] {head}: {body}"
+                for n, head, body in ap.items
+            ]
         if codes is None or code in codes:
             (out / f"{code}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
             sizes[f"{code}.md"] = (out / f"{code}.md").stat().st_size

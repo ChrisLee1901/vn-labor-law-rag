@@ -22,7 +22,9 @@ def emb(seed: int) -> str:
 @pytest.fixture(scope="module", autouse=True)
 def data(sync_conn):
     c = sync_conn
-    c.execute("delete from chunks; delete from articles; delete from legal_refs; delete from legal_docs")
+    c.execute(
+        "delete from chunks; delete from articles; delete from legal_refs; delete from legal_docs"
+    )
     c.execute(
         """insert into legal_docs(code, number, title, doc_type, effective_from, effective_to, status) values
            ('ND293-2025','293/2025/NĐ-CP','Lương tối thiểu','nghi_dinh','2026-01-01','2027-01-01','het_hieu_luc'),
@@ -30,7 +32,12 @@ def data(sync_conn):
     )
     for i, (code, art, text, na) in enumerate(
         [
-            ("ND293-2025", 3, "mức lương tối thiểu vùng I", "muc luong toi thieu vung I"),
+            (
+                "ND293-2025",
+                3,
+                "mức lương tối thiểu vùng I",
+                "muc luong toi thieu vung I",
+            ),
             ("ND145-2020", 12, "điều kiện làm thêm giờ", "dieu kien lam them gio"),
             ("ND145-2020", 13, "nghỉ hằng năm", "nghi hang nam"),
         ]
@@ -48,26 +55,36 @@ def data(sync_conn):
 
 
 async def test_tsquery_no_diacritics_hits_noaccent_column(aconn):
-    got = await retrieve("luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False)
+    got = await retrieve(
+        "luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False
+    )
     assert got and got[0].parent_id == "ND293-2025:D3" and got[0].rerank is None
 
 
 async def test_regex_id_pinned_first(aconn):
-    got = await retrieve("Điều 12 Nghị định 145/2020 nói gì", TODAY, OFFLINE, aconn, 1, online=False)
+    got = await retrieve(
+        "Điều 12 Nghị định 145/2020 nói gì", TODAY, OFFLINE, aconn, 1, online=False
+    )
     assert got[0].parent_id == "ND145-2020:D12" and got[0].rerank == 1.0
     assert len({c.parent_id for c in got}) == len(got)
 
 
 async def test_pinned_ignored_when_article_missing(aconn):
-    got = await retrieve("Điều 99 Nghị định 145/2020", TODAY, OFFLINE, aconn, 1, online=False)
+    got = await retrieve(
+        "Điều 99 Nghị định 145/2020", TODAY, OFFLINE, aconn, 1, online=False
+    )
     assert all(c.parent_id != "ND145-2020:D99" for c in got)
 
 
 def test_extract_query_ids_rules():
-    assert extract_query_ids("khoản 2 Điều 12 Nghị định 145/2020/NĐ-CP") == ["ND145-2020:D12:K2"]
+    assert extract_query_ids("khoản 2 Điều 12 Nghị định 145/2020/NĐ-CP") == [
+        "ND145-2020:D12:K2"
+    ]
     assert extract_query_ids("Điều 12 quy định gì") == []  # no explicit doc
     assert extract_query_ids("Nghị định 145/2020") == []  # no article
-    assert isinstance(extract_query_ids("Điều 12 Nghị định 1/2000 " * 5000), list)  # capped input
+    assert isinstance(
+        extract_query_ids("Điều 12 Nghị định 1/2000 " * 5000), list
+    )  # capped input
 
 
 async def test_embed_offline_falls_back_to_fts(aconn):
@@ -75,7 +92,14 @@ async def test_embed_offline_falls_back_to_fts(aconn):
         async def embed(self, texts):
             raise LLMOffline()
 
-    got = await retrieve("luong toi thieu", TODAY, Down("https://x.ngrok-free.app", "k"), aconn, 1, online=True)
+    got = await retrieve(
+        "luong toi thieu",
+        TODAY,
+        Down("https://x.ngrok-free.app", "k"),
+        aconn,
+        1,
+        online=True,
+    )
     assert got[0].parent_id == "ND293-2025:D3" and got[0].rerank is None
 
 
@@ -88,7 +112,9 @@ async def test_online_rerank_max_per_parent(aconn):
             # prefer the ND145 D13 text
             return [(i, 0.9 if "nghỉ hằng" in d else 0.2) for i, d in enumerate(docs)]
 
-    got = await retrieve("luong toi thieu", TODAY, Fake(None, "k"), aconn, 1, online=True)
+    got = await retrieve(
+        "luong toi thieu", TODAY, Fake(None, "k"), aconn, 1, online=True
+    )
     assert got[0].parent_id == "ND145-2020:D13" and got[0].rerank == 0.9
     assert len(got) <= 6
 
@@ -115,17 +141,35 @@ async def test_retrieve_records_spans(aconn):
             return contextlib.nullcontext()
 
     t = T()
-    await retrieve("luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False, trace=t)
+    await retrieve(
+        "luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False, trace=t
+    )
     assert t.names == ["hybrid_search"]  # offline: không embed/rerank
 
 
 async def test_pin_text_adds_refs_from_raw_question_deduped(aconn):
     got = await retrieve(
-        "luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False, pin_text="Điều 12 Nghị định 145/2020 thì sao"
+        "luong toi thieu vung 1",
+        TODAY,
+        OFFLINE,
+        aconn,
+        1,
+        online=False,
+        pin_text="Điều 12 Nghị định 145/2020 thì sao",
     )
     ids = [c.parent_id for c in got]
-    assert ids[0] == "ND145-2020:D12" and "ND293-2025:D3" in ids and len(ids) == len(set(ids))
+    assert (
+        ids[0] == "ND145-2020:D12"
+        and "ND293-2025:D3" in ids
+        and len(ids) == len(set(ids))
+    )
     same = await retrieve(
-        "Điều 12 Nghị định 145/2020", TODAY, OFFLINE, aconn, 1, online=False, pin_text="Điều 12 Nghị định 145/2020"
+        "Điều 12 Nghị định 145/2020",
+        TODAY,
+        OFFLINE,
+        aconn,
+        1,
+        online=False,
+        pin_text="Điều 12 Nghị định 145/2020",
     )
     assert [c.parent_id for c in same].count("ND145-2020:D12") == 1

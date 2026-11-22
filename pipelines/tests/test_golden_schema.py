@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from rag_pipelines.eval.golden_schema import QUOTA, GoldItem, load_golden, syllable_jaccard, validate_set
+from rag_pipelines.eval.golden_schema import (
+    QUOTA,
+    GoldItem,
+    load_golden,
+    syllable_jaccard,
+    validate_set,
+)
 
 IDS = {"X:D1", "X:D2", "X:D3:K1"}
 NO_GOLD = {"unanswerable", "out_of_domain", "injection"}
@@ -15,8 +21,18 @@ def make_set(**over) -> list[GoldItem]:
         for i in range(q):
             n += 1
             dev = i < q // 3
-            items.append(GoldItem(f"q{n:03d}", f"cau hoi so {n} ve {t}", "tra loi", [] if t in NO_GOLD else ["X:D1"], t,
-                                  "2026-01-01", "dev" if dev else "test", "trich dan khac hoan toan"))
+            items.append(
+                GoldItem(
+                    f"q{n:03d}",
+                    f"cau hoi so {n} ve {t}",
+                    "tra loi",
+                    [] if t in NO_GOLD else ["X:D1"],
+                    t,
+                    "2026-01-01",
+                    "dev" if dev else "test",
+                    "trich dan khac hoan toan",
+                )
+            )
     return items
 
 
@@ -51,7 +67,9 @@ def test_split_counts_and_stratification():
     assert any("split" in e for e in errs(items))
     items = make_set()
     singles = [i for i in items if i.type == "single"]
-    for i in singles[:14]:  # skew the per-type dev share: single loses 14 dev, numeric gains 14 dev
+    for i in singles[
+        :14
+    ]:  # skew the per-type dev share: single loses 14 dev, numeric gains 14 dev
         i.split = "test"
     for i in [i for i in items if i.type == "numeric"][6:20]:
         i.split = "dev"
@@ -68,12 +86,27 @@ def test_jaccard_copy_detected():
 
 
 def test_load_golden_validates(tmp_path: Path):
-    good = dict(id="q001", question="q", answer="a", gold=["X:D1"], type="single", as_of="2026-01-01", split="dev", source_quote="s")
+    good = dict(
+        id="q001",
+        question="q",
+        answer="a",
+        gold=["X:D1"],
+        type="single",
+        as_of="2026-01-01",
+        split="dev",
+        source_quote="s",
+    )
     p = tmp_path / "g.jsonl"
     p.write_text(json.dumps(good) + "\n", encoding="utf-8")
     assert load_golden(p)[0].id == "q001"
-    for bad in (dict(good, gold=[]), dict(good, type="unanswerable"), dict(good, type="nope"), dict(good, split="x"),
-                dict(good, as_of="01/01/2026"), {k: v for k, v in good.items() if k != "answer"}):
+    for bad in (
+        dict(good, gold=[]),
+        dict(good, type="unanswerable"),
+        dict(good, type="nope"),
+        dict(good, split="x"),
+        dict(good, as_of="01/01/2026"),
+        {k: v for k, v in good.items() if k != "answer"},
+    ):
         p.write_text(json.dumps(bad) + "\n", encoding="utf-8")
         with pytest.raises(ValueError):
             load_golden(p)

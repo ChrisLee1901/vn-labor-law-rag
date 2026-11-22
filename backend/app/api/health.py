@@ -1,4 +1,5 @@
 """GET /api/health: luôn 200; lỗi DB báo bằng db="down"."""
+
 import asyncio
 import logging
 
@@ -23,8 +24,14 @@ async def _db_version(request: Request) -> int | None:
 
 @router.get("/api/health")
 async def health(request: Request):
-    online, version = await asyncio.gather(llm_online(request.app.state.gw), _db_version(request))
+    online, version = await asyncio.gather(
+        llm_online(request.app.state.gw), _db_version(request)
+    )
     return JSONResponse(
-        {"llm": "online" if online else "offline", "db": "ok" if version is not None else "down", "index_version": version or 0},
+        {
+            "llm": "online" if online else "offline",
+            "db": "ok" if version is not None else "down",
+            "index_version": version or 0,
+        },
         headers={"cache-control": "no-store"},
     )

@@ -13,8 +13,12 @@ from psycopg import conninfo, sql
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-BASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/postgres")
-MIGRATIONS = sorted((pathlib.Path(__file__).parents[2] / "supabase" / "migrations").glob("*.sql"))
+BASE_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/postgres"
+)
+MIGRATIONS = sorted(
+    (pathlib.Path(__file__).parents[2] / "supabase" / "migrations").glob("*.sql")
+)
 
 
 @pytest.fixture(scope="session")
@@ -32,7 +36,11 @@ def db_url():
                     c.execute(f.read_text(encoding="utf-8"))
             yield url
         finally:
-            admin.execute(sql.SQL("drop database if exists {} with (force)").format(sql.Identifier(name)))
+            admin.execute(
+                sql.SQL("drop database if exists {} with (force)").format(
+                    sql.Identifier(name)
+                )
+            )
 
 
 @pytest.fixture(scope="session")

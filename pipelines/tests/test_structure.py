@@ -3,7 +3,16 @@ import pytest
 from rag_pipelines.extract import extract_text
 from rag_pipelines.structure import Article, parse_document, parse_document_with_stats
 
-CODES = ["BLLD", "ND145-2020", "ND293-2025", "ND399-2026", "LBHXH-2024", "ND158-2025", "LVL-2025", "ND374-2025"]
+CODES = [
+    "BLLD",
+    "ND145-2020",
+    "ND293-2025",
+    "ND399-2026",
+    "LBHXH-2024",
+    "ND158-2025",
+    "LVL-2025",
+    "ND374-2025",
+]
 COUNTS = {"BLLD": 220, "LBHXH-2024": 141, "LVL-2025": 55, "ND145-2020": 115}
 
 
@@ -34,7 +43,10 @@ def test_numbering_consecutive_from_one(parsed, code):
 
 def test_clause_and_point_parsing():
     arts = parse_document(extract_text("BLLD"), "BLLD")
-    assert any(a.clauses and a.clauses[0].points and a.clauses[0].points[0].letter == "a" for a in arts)
+    assert any(
+        a.clauses and a.clauses[0].points and a.clauses[0].points[0].letter == "a"
+        for a in arts
+    )
 
 
 def test_parse_document_matches_stats_version():
@@ -46,16 +58,23 @@ def test_appendix_forms_dropped(parsed):
     arts, dropped = parsed["ND145-2020"]
     assert dropped > 10000
     body = arts[-1].intro + " ".join(c.text for c in arts[-1].clauses)
-    assert "TM. CHÍNH PHỦ" not in body and "Phụ lục" not in body.split("Điều")[-1][-200:]
+    assert (
+        "TM. CHÍNH PHỦ" not in body and "Phụ lục" not in body.split("Điều")[-1][-200:]
+    )
 
 
 def test_chapter_section_and_wrapped_title():
     arts = {a.number: a for a in parse_document(extract_text("BLLD"), "BLLD")}
-    assert arts[1].chapter == "Chương I. NHỮNG QUY ĐỊNH CHUNG" and arts[1].section is None
+    assert (
+        arts[1].chapter == "Chương I. NHỮNG QUY ĐỊNH CHUNG" and arts[1].section is None
+    )
     assert arts[13].chapter == "Chương III. HỢP ĐỒNG LAO ĐỘNG"
     assert arts[13].section == "Mục 1. GIAO KẾT HỢP ĐỒNG LAO ĐỘNG"
     lb = {a.number: a for a in parse_document(extract_text("LBHXH-2024"), "LBHXH-2024")}
-    assert lb[10].title == "Quyền của người tham gia và người thụ hưởng chế độ bảo hiểm xã hội"
+    assert (
+        lb[10].title
+        == "Quyền của người tham gia và người thụ hưởng chế độ bảo hiểm xã hội"
+    )
     assert lb[2].chapter == "Chương I. NHỮNG QUY ĐỊNH CHUNG"
 
 
@@ -85,14 +104,20 @@ def test_synthetic_rules():
 
 
 def test_chapter_intro_kept_in_next_article_intro():
-    arts = {a.number: a for a in parse_document(extract_text("ND158-2025"), "ND158-2025")}
-    assert arts[6].intro.startswith("Đăng ký tham gia và quản lý thu, đóng bảo hiểm xã hội bắt buộc được thực hiện theo quy định tại Chương IV")
+    arts = {
+        a.number: a for a in parse_document(extract_text("ND158-2025"), "ND158-2025")
+    }
+    assert arts[6].intro.startswith(
+        "Đăng ký tham gia và quản lý thu, đóng bảo hiểm xã hội bắt buộc được thực hiện theo quy định tại Chương IV"
+    )
     assert arts[6].intro.split("\n")[1].startswith("Việc đăng ký tham gia")
 
 
 def test_four_line_title_not_truncated():
     a5 = parse_document(extract_text("ND145-2020"), "ND145-2020")[4]
-    assert a5.title.endswith("quyền biểu quyết") and a5.intro.startswith("Hợp đồng lao động")
+    assert a5.title.endswith("quyền biểu quyết") and a5.intro.startswith(
+        "Hợp đồng lao động"
+    )
 
 
 def test_point_with_footnote_digit():

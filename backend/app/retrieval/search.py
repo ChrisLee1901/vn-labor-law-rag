@@ -1,4 +1,5 @@
 """Hybrid retrieval: FTS + vector (RRF trong SQL) -> rerank qua gateway -> top Điều cha; ID nêu rõ trong câu hỏi được ghim lên đầu."""
+
 import asyncio
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -38,7 +39,9 @@ def extract_query_ids(q: str) -> list[str]:
     return ids
 
 
-async def _pinned(conn: AsyncConnection, question: str, index_version: int) -> list[Candidate]:
+async def _pinned(
+    conn: AsyncConnection, question: str, index_version: int
+) -> list[Candidate]:
     parents: list[str] = []
     for i in extract_query_ids(question):
         code, art, _, _ = parse_id(i)
@@ -47,26 +50,45 @@ async def _pinned(conn: AsyncConnection, question: str, index_version: int) -> l
             parents.append(p)
     if not parents:
         return []
-    cur = await conn.execute("select id from articles where index_version = %s and id = any(%s)", (index_version, parents))
+    cur = await conn.execute(
+        "select id from articles where index_version = %s and id = any(%s)",
+        (index_version, parents),
+    )
     exist = {r[0] for r in await cur.fetchall()}
     return [Candidate(p, p, 1.0, 1.0) for p in parents if p in exist]
 
 
-async def _hybrid(conn, question: str, as_of: date, index_version: int, vec: list[float] | None) -> list[tuple[str, str, float]]:
+async def _hybrid(
+    conn, question: str, as_of: date, index_version: int, vec: list[float] | None
+) -> list[tuple[str, str, float]]:
     qe = "[" + ",".join(map(str, vec)) + "]" if vec is not None else None
     cur = await conn.execute(
         "select id, parent_id, score from hybrid_search(%s::text, %s::text, %s::halfvec, %s, %s::date, %s)",
-        (build_tsquery(question), build_tsquery(strip_diacritics(question)), qe, index_version, as_of, CANDIDATES),
+        (
+            build_tsquery(question),
+            build_tsquery(strip_diacritics(question)),
+            qe,
+            index_version,
+            as_of,
+            CANDIDATES,
+        ),
     )
     return await cur.fetchall()
 
 
-async def _rerank(conn, gw: Gateway, question: str, rows, index_version: int) -> list[Candidate]:
+async def _rerank(
+    conn, gw: Gateway, question: str, rows, index_version: int
+) -> list[Candidate]:
     ids = [r[0] for r in rows]
-    cur = await conn.execute("select id, embed_text from chunks where index_version = %s and id = any(%s)", (index_version, ids))
+    cur = await conn.execute(
+        "select id, embed_text from chunks where index_version = %s and id = any(%s)",
+        (index_version, ids),
+    )
     text = dict(await cur.fetchall())
     kept = [r for r in rows if r[0] in text]
-    ranked = await gw.rerank(question, [text[r[0]][:MAX_RERANK_CHARS] for r in kept], len(kept))
+    ranked = await gw.rerank(
+        question, [text[r[0]][:MAX_RERANK_CHARS] for r in kept], len(kept)
+    )
     best: dict[str, Candidate] = {}
     for idx, s in ranked:
         cid, pid, rrf = kept[idx]
@@ -119,6 +141,8 @@ async def retrieve(
     pinned = await _pinned(conn, question, index_version)
     if pin_text and pin_text != question:
         raw = await _pinned(conn, pin_text, index_version)
-        pinned = raw + [c for c in pinned if c.parent_id not in {r.parent_id for r in raw}]
+        pinned = raw + [
+            c for c in pinned if c.parent_id not in {r.parent_id for r in raw}
+        ]
     taken = {c.parent_id for c in pinned}
     return (pinned + [c for c in cands if c.parent_id not in taken])[:TOP_PARENTS]

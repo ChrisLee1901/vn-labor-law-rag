@@ -1,4 +1,5 @@
 """GET /api/docs, /api/docs/{code}: chỉ chỉ mục đang hoạt động; loại văn bản có doc_type/status NULL hoặc ngoài tập hợp lệ."""
+
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Request
@@ -33,8 +34,14 @@ async def list_docs(request: Request):
         rows = await cur.fetchall()
     out = [
         {
-            "code": c, "number": n, "title": t, "doc_type": dt, "effective_from": _iso(ef),
-            "effective_to": _iso(et), "status": st, "articles": cnt,
+            "code": c,
+            "number": n,
+            "title": t,
+            "doc_type": dt,
+            "effective_from": _iso(ef),
+            "effective_to": _iso(et),
+            "status": st,
+            "articles": cnt,
         }
         for c, n, t, dt, ef, et, st, cnt in rows
     ]
@@ -61,12 +68,29 @@ async def get_doc(code: str, request: Request):
         )
         arts = await cur.fetchall()
     doc = {
-        "code": d[0], "number": d[1], "title": d[2], "doc_type": d[3], "effective_from": _iso(d[4]),
-        "effective_to": _iso(d[5]), "status": d[6], "issuer": d[7], "issued_on": _iso(d[8]),
-        "replaced_by": d[9], "amends": list(d[10] or []), "source_url": d[11],
+        "code": d[0],
+        "number": d[1],
+        "title": d[2],
+        "doc_type": d[3],
+        "effective_from": _iso(d[4]),
+        "effective_to": _iso(d[5]),
+        "status": d[6],
+        "issuer": d[7],
+        "issued_on": _iso(d[8]),
+        "replaced_by": d[9],
+        "amends": list(d[10] or []),
+        "source_url": d[11],
     }
     articles = [
-        {"id": i, "number": n, "suffix": s, "title": t, "chapter": ch, "content": c, "kind": k}
+        {
+            "id": i,
+            "number": n,
+            "suffix": s,
+            "title": t,
+            "chapter": ch,
+            "content": c,
+            "kind": k,
+        }
         for i, n, s, t, ch, c, k in arts
     ]
     return JSONResponse({"doc": doc, "articles": articles}, headers=CACHE)

@@ -1,4 +1,5 @@
 """Kiểm tra trích dẫn xác định (không dùng LLM) và ngưỡng từ chối."""
+
 import logging
 import re
 import unicodedata
@@ -32,15 +33,25 @@ def check_citations(answer: str, sources: list[SourceDoc]) -> CitationReport:
     cited: list[str] = []
     for inner in _BRACKET.findall(answer):
         # Token không parse được (vd `S1-S3`) bị coi là không hợp lệ.
-        cited += re.findall(r"S\d+", inner.upper()) if _VALID.fullmatch(inner.strip()) else [inner.strip()]
+        cited += (
+            re.findall(r"S\d+", inner.upper())
+            if _VALID.fullmatch(inner.strip())
+            else [inner.strip()]
+        )
     cited = list(dict.fromkeys(cited))
     valid = [c for c in cited if c in known]
     invalid = [c for c in cited if c not in known]
     # shortcut: chỉ so số Điều, không đối chiếu văn bản đi kèm; nâng cấp khi cần phân biệt Điều của nhiều văn bản.
     # Phụ lục không có số Điều thật nên không được tính.
     articles = {s.article for s in sources if not is_appendix_id(s.id)}
-    mismatch = [f"Điều {n}" for n in dict.fromkeys(_ARTICLE.findall(answer)) if int(n) not in articles]
-    return CitationReport(valid, invalid, not valid and REFUSAL_TEXT not in answer, mismatch)
+    mismatch = [
+        f"Điều {n}"
+        for n in dict.fromkeys(_ARTICLE.findall(answer))
+        if int(n) not in articles
+    ]
+    return CitationReport(
+        valid, invalid, not valid and REFUSAL_TEXT not in answer, mismatch
+    )
 
 
 def strip_citations(text: str) -> str:
@@ -52,5 +63,8 @@ def should_refuse(candidates: list[Candidate], tau: float) -> bool:
     """Từ chối khi có điểm rerank và điểm cao nhất < tau. Không rerank (offline) thì không từ chối."""
     scores = [c.rerank for c in candidates if c.rerank is not None]
     if candidates and not scores:
-        log.warning("should_refuse: %d candidates but none has a rerank score; refusal check skipped", len(candidates))
+        log.warning(
+            "should_refuse: %d candidates but none has a rerank score; refusal check skipped",
+            len(candidates),
+        )
     return bool(scores) and max(scores) < tau

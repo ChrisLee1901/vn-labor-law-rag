@@ -1,4 +1,5 @@
 """Suy ra ngày hiệu lực (`as_of`) mà người dùng hỏi từ câu hỏi."""
+
 import re
 from datetime import date
 
@@ -21,7 +22,7 @@ def _date(y: int, m: int, d: int) -> date | None:
 
 
 def extract_as_of(q: str, today: date) -> date:
-    """"từ 1/1/2027" -> 2027-01-01; "năm 2027" -> 2027-01-01 nếu năm > năm nay, ngược lại 31/12; mặc định `today`."""
+    """ "từ 1/1/2027" -> 2027-01-01; "năm 2027" -> 2027-01-01 nếu năm > năm nay, ngược lại 31/12; mặc định `today`."""
     n = strip_diacritics(nfc(q)).lower()
     for m in _DMY.finditer(n):
         if d := _date(int(m[3]), int(m[2]), int(m[1])):

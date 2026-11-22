@@ -38,7 +38,9 @@ def _ip_key(ip: str, window: int) -> str:
         addr = ipaddress.ip_address(ip.strip())
         if isinstance(addr, ipaddress.IPv6Address):
             # IPv6 clients hold a whole /64, so key on that; unwrap IPv4-mapped addresses.
-            norm = str(addr.ipv4_mapped or ipaddress.ip_network(f"{addr}/64", strict=False))
+            norm = str(
+                addr.ipv4_mapped or ipaddress.ip_network(f"{addr}/64", strict=False)
+            )
         else:
             norm = str(addr)
     except ValueError:
@@ -67,7 +69,12 @@ async def check(
     headers = {"Authorization": f"Bearer {s.UPSTASH_REDIS_REST_TOKEN}"}
 
     async def count(c: httpx.AsyncClient, key: str, ttl: int) -> int:
-        r = await c.post(url, json=[["INCR", key], ["EXPIRE", key, str(ttl), "NX"]], headers=headers, timeout=TIMEOUT)
+        r = await c.post(
+            url,
+            json=[["INCR", key], ["EXPIRE", key, str(ttl), "NX"]],
+            headers=headers,
+            timeout=TIMEOUT,
+        )
         r.raise_for_status()
         return int(r.json()[0]["result"])
 
@@ -82,7 +89,14 @@ async def check(
             finally:
                 if client is None:
                     await c.aclose()
-    except (httpx.HTTPError, TimeoutError, ValueError, KeyError, IndexError, TypeError) as e:
+    except (
+        httpx.HTTPError,
+        TimeoutError,
+        ValueError,
+        KeyError,
+        IndexError,
+        TypeError,
+    ) as e:
         # Fail open: the Vercel WAF rate-limit rule is the second layer, an Upstash outage must not take chat down.
         logger.warning("rate limit check failed, allowing request: %r", e)
         return True

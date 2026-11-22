@@ -1,13 +1,14 @@
 """Generate kaggle/serve.ipynb. gateway.py is embedded verbatim, so edit it, then run:
 
-    python kaggle/build_notebook.py
+python kaggle/build_notebook.py
 """
+
 import json
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-SECRETS = r'''# [1] secrets
+SECRETS = r"""# [1] secrets
 import os, subprocess, sys
 from kaggle_secrets import UserSecretsClient
 
@@ -22,9 +23,9 @@ os.environ["NGROK_DOMAIN"] = os.environ["NGROK_DOMAIN"].removeprefix("https://")
 os.makedirs("/kaggle/working", exist_ok=True)
 os.chdir("/kaggle/working")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyngrok", "fastapi", "uvicorn", "httpx"], check=True)
-'''
+"""
 
-LLAMA_BIN = r'''# [2] llama-server binary (dataset llamacpp-sm75-bin, else build from source ~26 min)
+LLAMA_BIN = r"""# [2] llama-server binary (dataset llamacpp-sm75-bin, else build from source ~26 min)
 import glob, os, shutil, stat, subprocess
 
 DATASET = "/kaggle/input/llamacpp-sm75-bin"
@@ -68,9 +69,9 @@ for root, _, files in os.walk(DEST):
 lib_dirs = sorted({os.path.dirname(p) for p in glob.glob(f"{DEST}/**/*.so*", recursive=True)} | {os.path.dirname(LLAMA_SERVER)})
 os.environ["LD_LIBRARY_PATH"] = ":".join(lib_dirs + [os.environ.get("LD_LIBRARY_PATH", "")])
 print("llama-server:", LLAMA_SERVER)
-'''
+"""
 
-LLAMA_RUN = r'''# [3] llama-server on GPU 0 (Qwen3-8B Q5_K_M, thinking off)
+LLAMA_RUN = r"""# [3] llama-server on GPU 0 (Qwen3-8B Q5_K_M, thinking off)
 import glob, json, os, subprocess
 from huggingface_hub import hf_hub_download
 
@@ -94,9 +95,9 @@ llama_log = open("/kaggle/working/llama.log", "wb")
 llama_proc = subprocess.Popen(cmd, stdout=llama_log, stderr=subprocess.STDOUT,
                               env=dict(os.environ, CUDA_VISIBLE_DEVICES="0"))
 print("llama-server pid", llama_proc.pid, "- log: /kaggle/working/llama.log")
-'''
+"""
 
-GATEWAY_START = r'''# [5] gateway on :8000 (background thread; loads embedder + reranker fp16 on cuda:1)
+GATEWAY_START = r"""# [5] gateway on :8000 (background thread; loads embedder + reranker fp16 on cuda:1)
 import os, sys, threading, traceback
 import uvicorn
 
@@ -119,9 +120,9 @@ def _serve():
 
 threading.Thread(target=_serve, daemon=True).start()
 print("gateway thread started (models load while llama-server loads)")
-'''
+"""
 
-WAIT = r'''# [6] wait until gateway /health says ok (llm + embedder + reranker), max 15 min
+WAIT = r"""# [6] wait until gateway /health says ok (llm + embedder + reranker), max 15 min
 import json, time, urllib.request
 
 H = "http://127.0.0.1:8000/health"
@@ -151,18 +152,18 @@ while True:
         raise TimeoutError("not ready after 15 min")
     time.sleep(10)
 print("local stack ready in", int(time.time() - t0), "s")
-'''
+"""
 
-NGROK = r'''# [7] public tunnel (static ngrok domain -> :8000)
+NGROK = r"""# [7] public tunnel (static ngrok domain -> :8000)
 import os
 from pyngrok import ngrok
 
 ngrok.set_auth_token(os.environ["NGROK_AUTHTOKEN"])
 ngrok.connect(8000, "http", domain=os.environ["NGROK_DOMAIN"])
 PUBLIC_URL = "https://" + os.environ["NGROK_DOMAIN"]
-'''
+"""
 
-SMOKE = r'''# [8] smoke test through the gateway, then READY
+SMOKE = r"""# [8] smoke test through the gateway, then READY
 import json, os, urllib.request
 
 BASE = "http://127.0.0.1:8000"
@@ -188,9 +189,9 @@ print("chat:", msg)
 if "<think>" in msg:
     print("WARNING: thinking is NOT disabled; check llama-server flags")
 print("READY", PUBLIC_URL)
-'''
+"""
 
-KEEPALIVE = r'''# [9] keep-alive: log /health every 60 s.
+KEEPALIVE = r"""# [9] keep-alive: log /health every 60 s.
 # STOP THE SESSION after the interview (Kaggle > Session options > Stop session). Do not leave it running (Kaggle ToS).
 import json, time, urllib.request
 
@@ -201,7 +202,7 @@ while True:
     except Exception as e:
         print(time.strftime("%H:%M:%S"), "health failed:", e)
     time.sleep(60)
-'''
+"""
 
 
 def _cell(src: str, kind: str = "code") -> dict:
@@ -214,12 +215,25 @@ def _cell(src: str, kind: str = "code") -> dict:
 def build() -> dict:
     # repo is eol=lf; normalise so the notebook is identical on Windows and Linux checkouts
     gateway = (HERE / "gateway.py").read_bytes().decode("utf-8").replace("\r\n", "\n")
-    sources = [SECRETS, LLAMA_BIN, LLAMA_RUN, "%%writefile gateway.py\n" + gateway,
-               GATEWAY_START, WAIT, NGROK, SMOKE, KEEPALIVE]
+    sources = [
+        SECRETS,
+        LLAMA_BIN,
+        LLAMA_RUN,
+        "%%writefile gateway.py\n" + gateway,
+        GATEWAY_START,
+        WAIT,
+        NGROK,
+        SMOKE,
+        KEEPALIVE,
+    ]
     return {
         "cells": [_cell(s) for s in sources],
         "metadata": {
-            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
             "language_info": {"name": "python"},
         },
         "nbformat": 4,
@@ -229,5 +243,9 @@ def build() -> dict:
 
 if __name__ == "__main__":
     out = HERE / "serve.ipynb"
-    out.write_text(json.dumps(build(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    out.write_text(
+        json.dumps(build(), ensure_ascii=False, indent=1) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     print("wrote", out)

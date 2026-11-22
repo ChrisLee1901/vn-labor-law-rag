@@ -6,7 +6,9 @@ import psycopg
 import pytest
 from psycopg import sql
 
-BASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/postgres")
+BASE_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/postgres"
+)
 MIGRATIONS = sorted((pathlib.Path(__file__).parent.parent / "migrations").glob("*.sql"))
 
 
@@ -23,4 +25,8 @@ def conn():
                     c.execute(f.read_text(encoding="utf-8"))
                 yield c
         finally:
-            admin.execute(sql.SQL("drop database if exists {} with (force)").format(sql.Identifier(name)))
+            admin.execute(
+                sql.SQL("drop database if exists {} with (force)").format(
+                    sql.Identifier(name)
+                )
+            )

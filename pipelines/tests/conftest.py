@@ -6,8 +6,12 @@ import psycopg
 import pytest
 from psycopg import conninfo, sql
 
-BASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/postgres")
-MIGRATIONS = sorted((pathlib.Path(__file__).parents[2] / "supabase" / "migrations").glob("*.sql"))
+BASE_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:54329/postgres"
+)
+MIGRATIONS = sorted(
+    (pathlib.Path(__file__).parents[2] / "supabase" / "migrations").glob("*.sql")
+)
 
 
 @pytest.fixture(scope="session")
@@ -29,7 +33,11 @@ def db_url():
                     c.execute(f.read_text(encoding="utf-8"))
             yield url
         finally:
-            admin.execute(sql.SQL("drop database if exists {} with (force)").format(sql.Identifier(name)))
+            admin.execute(
+                sql.SQL("drop database if exists {} with (force)").format(
+                    sql.Identifier(name)
+                )
+            )
 
 
 @pytest.fixture
@@ -37,5 +45,7 @@ def conn(db_url):
     """Clean tables and active_index_version=1 for every test."""
     with psycopg.connect(db_url, autocommit=True) as c:
         c.execute("truncate chunks, legal_refs, articles, legal_docs cascade")
-        c.execute("insert into app_config(key, value) values ('active_index_version', '1') on conflict (key) do update set value = excluded.value")
+        c.execute(
+            "insert into app_config(key, value) values ('active_index_version', '1') on conflict (key) do update set value = excluded.value"
+        )
         yield c

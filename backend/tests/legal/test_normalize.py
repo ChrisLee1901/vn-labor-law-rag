@@ -2,7 +2,10 @@ from app.legal.normalize import nfc, strip_diacritics
 
 
 def test_strip_diacritics():
-    assert strip_diacritics("Đường lương tối thiểu vùng I") == "Duong luong toi thieu vung I"
+    assert (
+        strip_diacritics("Đường lương tối thiểu vùng I")
+        == "Duong luong toi thieu vung I"
+    )
     assert strip_diacritics("đ") == "d"
 
 
@@ -13,7 +16,12 @@ def test_nfc_composes():
 def test_question_key():
     from app.legal.normalize import question_key
 
-    assert question_key("  Mức   LƯƠNG tối thiểu vùng I?? ") == "mức lương tối thiểu vùng i"
+    assert (
+        question_key("  Mức   LƯƠNG tối thiểu vùng I?? ")
+        == "mức lương tối thiểu vùng i"
+    )
     import unicodedata
 
-    assert question_key(unicodedata.normalize("NFD", "Mức lương")) == question_key("Mức lương")
+    assert question_key(unicodedata.normalize("NFD", "Mức lương")) == question_key(
+        "Mức lương"
+    )

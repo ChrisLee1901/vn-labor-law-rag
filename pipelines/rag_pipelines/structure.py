@@ -17,6 +17,7 @@ Heuristic chính (PDF bị ngắt dòng cứng, DOCX thì sạch):
 - Lời dẫn nằm giữa dòng Chương/Mục và Điều kế tiếp được nối vào đầu `intro` của Điều đó (ngăn bằng dòng mới).
 - Chương/Mục: dòng `Chương IV` / `Mục 2` (hoặc kèm phần chữ HOA) + các dòng chữ HOA kế tiếp => "Chương IV. TÊN".
 """
+
 import re
 from dataclasses import dataclass, field
 
@@ -36,7 +37,18 @@ _END = re.compile(
 )
 _APPENDIX = re.compile(r"^Phụ lục(?:\s+([IVX]+))?$")
 _APPENDIX_ITEM = re.compile(r"^(\d+)\. (.+)$")
-_ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
+_ROMAN = {
+    "I": 1,
+    "II": 2,
+    "III": 3,
+    "IV": 4,
+    "V": 5,
+    "VI": 6,
+    "VII": 7,
+    "VIII": 8,
+    "IX": 9,
+    "X": 10,
+}
 _TITLE_MIN_WRAP = 60
 _TITLE_MAX_LINES = 5
 
@@ -77,13 +89,28 @@ class Appendix:
 class _Open:
     """Điều đang dựng: các mảnh text theo vị trí, join bằng 1 dấu cách khi chốt."""
 
-    def __init__(self, num: int, suffix: str, title: str, raw_len: int, chapter: str | None, section: str | None):
-        self.num, self.suffix, self.chapter, self.section = num, suffix, chapter, section
+    def __init__(
+        self,
+        num: int,
+        suffix: str,
+        title: str,
+        raw_len: int,
+        chapter: str | None,
+        section: str | None,
+    ):
+        self.num, self.suffix, self.chapter, self.section = (
+            num,
+            suffix,
+            chapter,
+            section,
+        )
         self.title = [title] if title else []
         self.title_raw_len = raw_len  # độ dài dòng tiêu đề cuối, gồm tiền tố "Điều N. "
         self.title_open = True
         self.intro: list[str] = []
-        self.clauses: list[tuple[int | None, list[str], list[tuple[str, list[str]]]]] = []
+        self.clauses: list[
+            tuple[int | None, list[str], list[tuple[str, list[str]]]]
+        ] = []
         self.target = self.intro
         self.pre = ""
 
@@ -103,7 +130,7 @@ class _Open:
     def accepts_letter(self, letter: str) -> bool:
         pts = self.clauses[-1][2] if self.clauses else []
         i = _POINTS.index(pts[-1][0]) + 1 if pts else 0
-        return letter == _POINTS[i:i + 1]
+        return letter == _POINTS[i : i + 1]
 
     def wants_title_line(self, line: str) -> bool:
         if not self.title or len(self.title) >= _TITLE_MAX_LINES:
@@ -114,15 +141,31 @@ class _Open:
         # (vd "...Mặt trận Tổ quốc Việt" / "Nam và các...") và dòng kế ngắn, tránh nuốt dòng đầu của intro.
         if line[0].islower():
             return True
-        return self.title_raw_len >= _TITLE_MIN_WRAP and len(line) < _TITLE_MIN_WRAP and self.title[-1].split()[-1][:1].isupper()
+        return (
+            self.title_raw_len >= _TITLE_MIN_WRAP
+            and len(line) < _TITLE_MIN_WRAP
+            and self.title[-1].split()[-1][:1].isupper()
+        )
 
     def build(self, code: str) -> Article:
         def j(parts: list[str]) -> str:
             return " ".join(parts).strip()
 
-        clauses = [Clause(n, j(t), [Point(ltr, j(p)) for ltr, p in pts]) for n, t, pts in self.clauses]
+        clauses = [
+            Clause(n, j(t), [Point(ltr, j(p)) for ltr, p in pts])
+            for n, t, pts in self.clauses
+        ]
         intro = "\n".join(x for x in (self.pre, j(self.intro)) if x)
-        return Article(code, self.num, self.suffix or None, j(self.title), self.chapter, self.section, intro, clauses)
+        return Article(
+            code,
+            self.num,
+            self.suffix or None,
+            j(self.title),
+            self.chapter,
+            self.section,
+            intro,
+            clauses,
+        )
 
 
 def _is_upper(line: str) -> bool:
@@ -134,7 +177,13 @@ def _next_suffix(s: str) -> str:
 
 
 def _looks_like_item(line: str) -> bool:
-    return bool(_CLAUSE.match(line) or _POINT.match(line) or _ARTICLE.match(line) or _CHAPTER.match(line) or _SECTION.match(line))
+    return bool(
+        _CLAUSE.match(line)
+        or _POINT.match(line)
+        or _ARTICLE.match(line)
+        or _CHAPTER.match(line)
+        or _SECTION.match(line)
+    )
 
 
 def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], int]:
@@ -145,7 +194,9 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
     chapter = section = None
     last = (0, "")
     stop = len(lines)
-    carry: list[str] = []  # lời dẫn dưới Chương/Mục, trước Điều kế tiếp: gắn vào đầu intro của Điều đó
+    carry: list[
+        str
+    ] = []  # lời dẫn dưới Chương/Mục, trước Điều kế tiếp: gắn vào đầu intro của Điều đó
     quote = 0  # độ sâu dấu ngoặc kép “…” còn mở
     i = 0
 
@@ -186,7 +237,9 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
         m = _ARTICLE.match(line)
         if m:
             n, suf = int(m.group(1)), m.group(2)
-            if (n == last[0] + 1 and not suf) or (last[0] > 0 and n == last[0] and suf == _next_suffix(last[1])):
+            if (n == last[0] + 1 and not suf) or (
+                last[0] > 0 and n == last[0] and suf == _next_suffix(last[1])
+            ):
                 if cur:
                     arts.append(cur.build(doc_code))
                 last = (n, suf)
@@ -207,10 +260,16 @@ def parse_document_with_stats(text: str, doc_code: str) -> tuple[list[Article], 
                 cur.title_raw_len = len(line)
                 continue
             cur.title_open = False
-        in_quote = quote > 0 or line.startswith("“")  # trích dẫn nguyên văn điều luật được sửa đổi
+        in_quote = quote > 0 or line.startswith(
+            "“"
+        )  # trích dẫn nguyên văn điều luật được sửa đổi
         quote = max(0, quote + line.count("“") - line.count("”"))
         m = None if in_quote else _CLAUSE.match(line)
-        if m and int(m.group(1)) == cur.numbered() + 1 and (not m.group(2) or m.group(3)[:1].isupper()):
+        if (
+            m
+            and int(m.group(1)) == cur.numbered() + 1
+            and (not m.group(2) or m.group(3)[:1].isupper())
+        ):
             cur.add_clause(int(m.group(1)), m.group(3) or "")
             continue
         m = None if in_quote else _POINT.match(line)
@@ -242,7 +301,11 @@ def parse_appendices(text: str, doc_code: str) -> list[Appendix]:
             continue
         m = _APPENDIX.match(line)
         if m:
-            ap, title, parts = Appendix(doc_code, _ROMAN.get(m.group(1), 1), "", []), [], []
+            ap, title, parts = (
+                Appendix(doc_code, _ROMAN.get(m.group(1), 1), "", []),
+                [],
+                [],
+            )
             out.append(ap)
             continue
         if ap is None:

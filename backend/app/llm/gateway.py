@@ -1,4 +1,5 @@
 """Client cho gateway Kaggle (embed / rerank / chat). Mọi lỗi hạ tầng -> LLMOffline để caller chuyển sang chế độ offline."""
+
 import json
 import re
 from collections.abc import AsyncIterator
@@ -21,7 +22,12 @@ class LLMStreamError(Exception):
 
 class Gateway:
     def __init__(
-        self, base_url: str | None, api_key: str, *, allow_any: bool = False, client: httpx.AsyncClient | None = None
+        self,
+        base_url: str | None,
+        api_key: str,
+        *,
+        allow_any: bool = False,
+        client: httpx.AsyncClient | None = None,
     ):
         # allow_any chỉ dùng trong test (bỏ kiểm tra allowlist ngrok); production luôn để False.
         # client: client dùng chung của app; Gateway không sở hữu nên aclose() không đóng nó.
@@ -68,17 +74,25 @@ class Gateway:
     async def embed(self, texts: list[str]) -> list[list[float]]:
         res = await self._post("/v1/embeddings", {"input": texts})
         try:
-            vecs = [d["embedding"] for d in sorted(res["data"], key=lambda d: d["index"])]
+            vecs = [
+                d["embedding"] for d in sorted(res["data"], key=lambda d: d["index"])
+            ]
         except (KeyError, TypeError) as e:
             raise LLMOffline(f"malformed embeddings response: {e!r}") from e
         if len(vecs) != len(texts):
             raise LLMOffline("embeddings count mismatch")
         return vecs
 
-    async def rerank(self, query: str, docs: list[str], top_n: int) -> list[tuple[int, float]]:
-        res = await self._post("/v1/rerank", {"query": query, "documents": docs, "top_n": top_n})
+    async def rerank(
+        self, query: str, docs: list[str], top_n: int
+    ) -> list[tuple[int, float]]:
+        res = await self._post(
+            "/v1/rerank", {"query": query, "documents": docs, "top_n": top_n}
+        )
         try:
-            out = [(int(r["index"]), float(r["relevance_score"])) for r in res["results"]]
+            out = [
+                (int(r["index"]), float(r["relevance_score"])) for r in res["results"]
+            ]
         except (KeyError, TypeError, ValueError) as e:
             raise LLMOffline(f"malformed rerank response: {e!r}") from e
         if any(not 0 <= i < len(docs) for i, _ in out):
@@ -88,7 +102,13 @@ class Gateway:
     async def chat_once(self, messages: list[dict], max_tokens: int = 128) -> str:
         """Gọi chat không stream (viết lại câu hỏi). LLMOffline nếu lỗi hạ tầng hoặc phản hồi sai dạng."""
         res = await self._post(
-            "/v1/chat/completions", {"messages": messages, "stream": False, "max_tokens": max_tokens, "temperature": 0}
+            "/v1/chat/completions",
+            {
+                "messages": messages,
+                "stream": False,
+                "max_tokens": max_tokens,
+                "temperature": 0,
+            },
         )
         try:
             return str(res["choices"][0]["message"]["content"]).strip()
@@ -108,7 +128,9 @@ class Gateway:
         url = self._url("/v1/chat/completions")
         body = {"messages": messages, "stream": True, "max_tokens": CHAT_MAX_TOKENS}
         try:
-            async with self._http().stream("POST", url, json=body, headers=self._headers) as r:
+            async with self._http().stream(
+                "POST", url, json=body, headers=self._headers
+            ) as r:
                 r.raise_for_status()
                 done = False
                 try:

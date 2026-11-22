@@ -1,4 +1,5 @@
 """Mở rộng 1-hop: thêm các Điều được tham chiếu (legal_refs) và các văn bản hướng dẫn chi tiết Điều đã chọn."""
+
 from dataclasses import dataclass
 from datetime import date
 
@@ -34,7 +35,11 @@ async def _rows(conn: AsyncConnection, query: str, params: tuple) -> list[tuple]
 
 
 async def expand(
-    parent_ids: list[str], conn: AsyncConnection, index_version: int, as_of: date, max_extra: int = 4
+    parent_ids: list[str],
+    conn: AsyncConnection,
+    index_version: int,
+    as_of: date,
+    max_extra: int = 4,
 ) -> list[SourceDoc]:
     parents = list(dict.fromkeys(parent_ids))
     by_id = {
@@ -69,7 +74,11 @@ async def expand(
             order by p.ord, substring(r.src_id from ':D([0-9]+)')::int nulls last, r.src_id""",
         (parents, index_version),
     )
-    extra_ids = [i for i in dict.fromkeys([make_id(c, a) for c, a in fwd] + [r[0] for r in rev]) if i not in by_id]
+    extra_ids = [
+        i
+        for i in dict.fromkeys([make_id(c, a) for c, a in fwd] + [r[0] for r in rev])
+        if i not in by_id
+    ]
     extras = {
         r[0]: r
         for r in await _rows(

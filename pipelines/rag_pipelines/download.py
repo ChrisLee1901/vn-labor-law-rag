@@ -1,4 +1,5 @@
 """Tải văn bản gốc từ Công báo theo legal_docs.yaml; ghi manifest.json (code, file, url, bytes, sha256)."""
+
 import argparse
 import hashlib
 import html
@@ -83,15 +84,27 @@ def run(docs_path: Path, out_dir: Path, manifest_path: Path) -> list[dict]:
             name = f"{code}.part{part[ext]}.{ext}"
             path = out_dir / code / name
             data = _get(url)
-            sig = {"pdf": b"%PDF", "docx": b"PK\x03\x04", "doc": b"\xd0\xcf\x11\xe0"}[ext]
+            sig = {"pdf": b"%PDF", "docx": b"PK\x03\x04", "doc": b"\xd0\xcf\x11\xe0"}[
+                ext
+            ]
             if not data.startswith(sig):
                 raise RuntimeError(f"{code}: {url} is not a real .{ext}")
             digest = _sha(data)
             if not (path.exists() and _sha(path.read_bytes()) == digest):
                 path.write_bytes(data)
-            entries.append({"code": code, "file": f"{code}/{name}", "url": url, "bytes": len(data), "sha256": digest})
+            entries.append(
+                {
+                    "code": code,
+                    "file": f"{code}/{name}",
+                    "url": url,
+                    "bytes": len(data),
+                    "sha256": digest,
+                }
+            )
             print(f"{code}: {name} {len(data)} bytes", file=sys.stderr)
-    manifest_path.write_text(json.dumps({"files": entries}, ensure_ascii=False, indent=1), encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps({"files": entries}, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
     return entries
 
 

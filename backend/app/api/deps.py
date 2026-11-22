@@ -1,4 +1,5 @@
 """Tiện ích dùng chung của các endpoint: kết nối DB, trạng thái gateway (cache 15 s), ngưỡng từ chối (cache 60 s)."""
+
 import asyncio
 import json
 import logging
@@ -32,7 +33,9 @@ def today_vn() -> date:
 
 
 @asynccontextmanager
-async def db_conn(request: Request, timeout: float = 5.0) -> AsyncIterator[psycopg.AsyncConnection]:
+async def db_conn(
+    request: Request, timeout: float = 5.0
+) -> AsyncIterator[psycopg.AsyncConnection]:
     """Kết nối từ pool của app; mọi lỗi kết nối thành HTTP 503 (tiếng Việt)."""
     pool = request.app.state.pool
     if pool is None:

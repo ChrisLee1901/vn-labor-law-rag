@@ -9,7 +9,9 @@ AS_OF = date(2026, 6, 1)
 @pytest.fixture(scope="module", autouse=True)
 def data(sync_conn):
     c = sync_conn
-    c.execute("delete from chunks; delete from articles; delete from legal_refs; delete from legal_docs")
+    c.execute(
+        "delete from chunks; delete from articles; delete from legal_refs; delete from legal_docs"
+    )
     c.execute(
         """insert into legal_docs(code, number, title, doc_type, effective_from, effective_to, status) values
            ('LBHXH-2024','41/2024/QH15','Luật BHXH','luat','2025-07-01',null,'con_hieu_luc'),
@@ -27,7 +29,14 @@ def data(sync_conn):
     ]:
         c.execute(
             "insert into articles(index_version, id, doc_code, number, title, content, kind) values (1, %s, %s, %s, %s, %s, %s)",
-            (f"{code}:D{art}" if kind == "dieu" else f"{code}:PL{art}", code, art, f"Điều {art}", f"nội dung {code} {art}", kind),
+            (
+                f"{code}:D{art}" if kind == "dieu" else f"{code}:PL{art}",
+                code,
+                art,
+                f"Điều {art}",
+                f"nội dung {code} {art}",
+                kind,
+            ),
         )
     refs = [
         ("LBHXH-2024:D33:K1", "LVL-2025", 47, "cites"),
@@ -46,7 +55,9 @@ def data(sync_conn):
 
 async def test_expand_adds_ref_targets_once(aconn):
     out = await expand(["LBHXH-2024:D33"], aconn, 1, AS_OF)
-    assert [d.id for d in out if d.via_ref and d.id == "LVL-2025:D47"] == ["LVL-2025:D47"]
+    assert [d.id for d in out if d.via_ref and d.id == "LVL-2025:D47"] == [
+        "LVL-2025:D47"
+    ]
     ids = [d.id for d in out]
     assert len(ids) == len(set(ids))
     assert "OLD-2000:D1" not in ids and "LVL-2025:D99" not in ids
@@ -63,25 +74,41 @@ async def test_expand_order_sids_reverse_details_and_cap(aconn):
 
 
 async def test_expand_parent_not_duplicated_as_extra_and_appendix(aconn):
-    out = await expand(["LVL-2025:D47", "LBHXH-2024:D33", "LVL-2025:PL1"], aconn, 1, AS_OF)
+    out = await expand(
+        ["LVL-2025:D47", "LBHXH-2024:D33", "LVL-2025:PL1"], aconn, 1, AS_OF
+    )
     assert [d.id for d in out[:3]] == ["LVL-2025:D47", "LBHXH-2024:D33", "LVL-2025:PL1"]
     assert len([d for d in out if d.id == "LVL-2025:D47"]) == 1
 
 
 async def test_expand_forward_refs_ordered_numerically(sync_conn, aconn):
     c = sync_conn
-    c.execute("insert into legal_docs(code, number, effective_from) values ('NUM-1','9/2025/QH15','2025-01-01')")
+    c.execute(
+        "insert into legal_docs(code, number, effective_from) values ('NUM-1','9/2025/QH15','2025-01-01')"
+    )
     for a in (2, 10):
-        c.execute("insert into articles(index_version, id, doc_code, number, content) values (1, %s, 'NUM-1', %s, 'x')", (f"NUM-1:D{a}", a))
-    c.execute("insert into articles(index_version, id, doc_code, number, content) values (1, 'NUM-1:D20', 'NUM-1', 20, 'x')")
+        c.execute(
+            "insert into articles(index_version, id, doc_code, number, content) values (1, %s, 'NUM-1', %s, 'x')",
+            (f"NUM-1:D{a}", a),
+        )
+    c.execute(
+        "insert into articles(index_version, id, doc_code, number, content) values (1, 'NUM-1:D20', 'NUM-1', 20, 'x')"
+    )
     for src, art in (("NUM-1:D20:K10", 10), ("NUM-1:D20:K2", 2)):
-        c.execute("insert into legal_refs(index_version, src_id, dst_doc_code, dst_article, rel) values (1, %s, 'NUM-1', %s, 'cites')", (src, art))
+        c.execute(
+            "insert into legal_refs(index_version, src_id, dst_doc_code, dst_article, rel) values (1, %s, 'NUM-1', %s, 'cites')",
+            (src, art),
+        )
     out = await expand(["NUM-1:D20"], aconn, 1, AS_OF)
     assert [d.id for d in out] == ["NUM-1:D20", "NUM-1:D2", "NUM-1:D10"]
 
 
 async def test_expand_null_doc_number_falls_back_to_code(sync_conn, aconn):
-    sync_conn.execute("insert into legal_docs(code, number, effective_from) values ('NONUM-1', null, '2025-01-01')")
-    sync_conn.execute("insert into articles(index_version, id, doc_code, number, content) values (1, 'NONUM-1:D1', 'NONUM-1', 1, 'x')")
+    sync_conn.execute(
+        "insert into legal_docs(code, number, effective_from) values ('NONUM-1', null, '2025-01-01')"
+    )
+    sync_conn.execute(
+        "insert into articles(index_version, id, doc_code, number, content) values (1, 'NONUM-1:D1', 'NONUM-1', 1, 'x')"
+    )
     out = await expand(["NONUM-1:D1"], aconn, 1, AS_OF)
     assert out[0].doc_number == "NONUM-1"

@@ -31,14 +31,22 @@ def db_down(client):
 def test_health_ok(client):
     with Gateway():
         r = client.get("/api/health")
-    assert r.status_code == 200 and r.json() == {"llm": "online", "db": "ok", "index_version": 1}
+    assert r.status_code == 200 and r.json() == {
+        "llm": "online",
+        "db": "ok",
+        "index_version": 1,
+    }
     assert r.headers["cache-control"] == "no-store"
 
 
 def test_health_db_down_and_llm_offline_is_still_200(client):
     with db_down(client), Gateway(online=False):
         r = client.get("/api/health")
-    assert r.status_code == 200 and r.json() == {"llm": "offline", "db": "down", "index_version": 0}
+    assert r.status_code == 200 and r.json() == {
+        "llm": "offline",
+        "db": "down",
+        "index_version": 0,
+    }
     assert r.headers["cache-control"] == "no-store"
 
 
@@ -78,32 +86,63 @@ def docs_data(seeded):
             (i, i.split(":")[0], num, suf, content, kind),
         )
     # index version khác không được tính
-    c.execute("insert into articles(index_version, id, doc_code, number, content) values (2, 'A-1:D99', 'A-1', 99, 'v2')")
+    c.execute(
+        "insert into articles(index_version, id, doc_code, number, content) values (2, 'A-1:D99', 'A-1', 99, 'v2')"
+    )
     return c
 
 
 def test_docs_list_filters_nulls_counts_dieu_only(client, docs_data):
     r = client.get("/api/docs")
-    assert r.status_code == 200 and r.headers["cache-control"] == "public, s-maxage=3600"
+    assert (
+        r.status_code == 200 and r.headers["cache-control"] == "public, s-maxage=3600"
+    )
     by = {d["code"]: d for d in r.json()}
-    assert set(by) == {"A-1", "NULLNUM", "ND293-2025", "ND145-2020"}  # NULL doc_type / status bị loại
+    assert set(by) == {
+        "A-1",
+        "NULLNUM",
+        "ND293-2025",
+        "ND145-2020",
+    }  # NULL doc_type / status bị loại
     assert by["A-1"] == {
-        "code": "A-1", "number": "1/2025/NĐ-CP", "title": "Văn bản A", "doc_type": "nghi_dinh",
-        "effective_from": "2025-02-01", "effective_to": None, "status": "con_hieu_luc", "articles": 3,
+        "code": "A-1",
+        "number": "1/2025/NĐ-CP",
+        "title": "Văn bản A",
+        "doc_type": "nghi_dinh",
+        "effective_from": "2025-02-01",
+        "effective_to": None,
+        "status": "con_hieu_luc",
+        "articles": 3,
     }
     assert by["NULLNUM"]["number"] is None and by["NULLNUM"]["articles"] == 0
 
 
 def test_docs_detail(client, docs_data):
     r = client.get("/api/docs/A-1")
-    assert r.status_code == 200 and r.headers["cache-control"] == "public, s-maxage=3600"
+    assert (
+        r.status_code == 200 and r.headers["cache-control"] == "public, s-maxage=3600"
+    )
     body = r.json()
     assert body["doc"] == {
-        "code": "A-1", "number": "1/2025/NĐ-CP", "title": "Văn bản A", "doc_type": "nghi_dinh", "effective_from": "2025-02-01",
-        "effective_to": None, "status": "con_hieu_luc", "issuer": "Chính phủ", "issued_on": "2025-01-01", "replaced_by": None,
-        "amends": ["ND145-2020"], "source_url": "https://x/a",
+        "code": "A-1",
+        "number": "1/2025/NĐ-CP",
+        "title": "Văn bản A",
+        "doc_type": "nghi_dinh",
+        "effective_from": "2025-02-01",
+        "effective_to": None,
+        "status": "con_hieu_luc",
+        "issuer": "Chính phủ",
+        "issued_on": "2025-01-01",
+        "replaced_by": None,
+        "amends": ["ND145-2020"],
+        "source_url": "https://x/a",
     }
-    assert [a["id"] for a in body["articles"]] == ["A-1:D2", "A-1:D2a", "A-1:D10", "A-1:PL1"]
+    assert [a["id"] for a in body["articles"]] == [
+        "A-1:D2",
+        "A-1:D2a",
+        "A-1:D10",
+        "A-1:PL1",
+    ]
     assert [a["kind"] for a in body["articles"]] == ["dieu", "dieu", "dieu", "phu_luc"]
     assert body["articles"][0]["content"] == "" and body["articles"][1]["suffix"] == "a"
 
@@ -123,13 +162,21 @@ def test_docs_db_down_503(client):
 
 # ---- feedback
 def rows(c):
-    return c.execute("select trace_id, score, comment from feedback order by id").fetchall()
+    return c.execute(
+        "select trace_id, score, comment from feedback order by id"
+    ).fetchall()
 
 
 def test_feedback_inserts_unknown_trace_id(client, seeded):
-    r = client.post("/api/feedback", json={"trace_id": "never-seen", "score": -1, "comment": "chưa đúng"})
+    r = client.post(
+        "/api/feedback",
+        json={"trace_id": "never-seen", "score": -1, "comment": "chưa đúng"},
+    )
     assert r.status_code == 204 and r.content == b""
-    assert client.post("/api/feedback", json={"trace_id": "t2", "score": 1}).status_code == 204
+    assert (
+        client.post("/api/feedback", json={"trace_id": "t2", "score": 1}).status_code
+        == 204
+    )
     assert rows(seeded) == [("never-seen", -1, "chưa đúng"), ("t2", 1, None)]
 
 
@@ -155,7 +202,13 @@ def test_feedback_validation_422(client, seeded, body):
 
 
 def test_feedback_limits_are_inclusive(client, seeded):
-    assert client.post("/api/feedback", json={"trace_id": "x" * 64, "score": 1, "comment": "c" * 500}).status_code == 204
+    assert (
+        client.post(
+            "/api/feedback",
+            json={"trace_id": "x" * 64, "score": 1, "comment": "c" * 500},
+        ).status_code
+        == 204
+    )
 
 
 def test_feedback_db_down_503(client):
@@ -168,8 +221,18 @@ def test_feedback_db_down_503(client):
 def test_cron_requires_secret(client):
     r = client.get("/api/cron/keepalive")
     assert r.status_code == 401 and r.json() == {"detail": "Không được phép."}
-    assert client.get("/api/cron/keepalive", headers={"authorization": "Bearer wrong"}).status_code == 401
-    assert client.get("/api/cron/keepalive", headers={"authorization": "s3cret"}).status_code == 401
+    assert (
+        client.get(
+            "/api/cron/keepalive", headers={"authorization": "Bearer wrong"}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.get(
+            "/api/cron/keepalive", headers={"authorization": "s3cret"}
+        ).status_code
+        == 401
+    )
     ok = client.get("/api/cron/keepalive", headers={"authorization": "Bearer s3cret"})
     assert ok.status_code == 204 and ok.content == b""
 
@@ -197,7 +260,12 @@ def test_cron_runs_select_1(client):
 
     real, client.app.state.pool = client.app.state.pool, Pool()
     try:
-        assert client.get("/api/cron/keepalive", headers={"authorization": "Bearer s3cret"}).status_code == 204
+        assert (
+            client.get(
+                "/api/cron/keepalive", headers={"authorization": "Bearer s3cret"}
+            ).status_code
+            == 204
+        )
     finally:
         client.app.state.pool = real
     assert executed == ["select 1"]
@@ -208,7 +276,12 @@ def test_cron_401_when_secret_unset(env):
     from app.main import create_app
 
     with TestClient(create_app()) as c:
-        for h in ({}, {"authorization": "Bearer "}, {"authorization": "Bearer None"}, {"authorization": "Bearer"}):
+        for h in (
+            {},
+            {"authorization": "Bearer "},
+            {"authorization": "Bearer None"},
+            {"authorization": "Bearer"},
+        ):
             assert c.get("/api/cron/keepalive", headers=h).status_code == 401
 
 
@@ -220,7 +293,11 @@ def test_cron_non_ascii_header_is_401_not_500(client):
 # ---- security / limits / lifecycle
 @pytest.mark.parametrize("path", ["/api/chat", "/api/feedback"])
 def test_body_over_64kb_is_413(client, path):
-    r = client.post(path, content=b"x" * (64 * 1024 + 1), headers={"content-type": "application/json"})
+    r = client.post(
+        path,
+        content=b"x" * (64 * 1024 + 1),
+        headers={"content-type": "application/json"},
+    )
     assert r.status_code == 413 and r.json() == {"detail": "Yêu cầu quá lớn."}
     assert r.headers["x-content-type-options"] == "nosniff"
 
@@ -230,7 +307,9 @@ def test_chunked_body_over_64kb_is_413(client):
         for _ in range(70):
             yield b" " * 1024
 
-    r = client.post("/api/feedback", content=gen(), headers={"content-type": "application/json"})
+    r = client.post(
+        "/api/feedback", content=gen(), headers={"content-type": "application/json"}
+    )
     assert r.status_code == 413
 
 

@@ -1,4 +1,5 @@
 """Authenticated gateway in front of llama-server + embedder + reranker (runs in a Kaggle notebook)."""
+
 import hmac
 import math
 import os
@@ -73,10 +74,14 @@ def create_app(
                 return await self.inner(scope, receive, send)
             got = dict(scope["headers"]).get(b"authorization", b"")
             if not hmac.compare_digest(got, expected):
-                return await JSONResponse({"detail": "unauthorized"}, status_code=401)(scope, receive, send)
+                return await JSONResponse({"detail": "unauthorized"}, status_code=401)(
+                    scope, receive, send
+                )
             declared = dict(scope["headers"]).get(b"content-length", b"0")
             if declared.isdigit() and int(declared) > MAX_BODY:
-                return await JSONResponse({"detail": "body too large"}, status_code=413)(scope, receive, send)
+                return await JSONResponse(
+                    {"detail": "body too large"}, status_code=413
+                )(scope, receive, send)
             seen = 0
 
             async def capped():
@@ -123,7 +128,10 @@ def create_app(
         with rer_lock:
             logits = reranker.predict([(req.query, d) for d in req.documents])
         scored = sorted(
-            ({"index": i, "relevance_score": _sigmoid(float(s))} for i, s in enumerate(logits)),
+            (
+                {"index": i, "relevance_score": _sigmoid(float(s))}
+                for i, s in enumerate(logits)
+            ),
             key=lambda x: x["relevance_score"],
             reverse=True,
         )
@@ -134,7 +142,9 @@ def create_app(
         url = f"{llm_url}/v1/chat/completions"
         try:
             if body.get("stream"):
-                up = await client.send(client.build_request("POST", url, json=body), stream=True)
+                up = await client.send(
+                    client.build_request("POST", url, json=body), stream=True
+                )
 
                 async def chunks():
                     try:
@@ -146,7 +156,9 @@ def create_app(
 
                 try:
                     return StreamingResponse(
-                        chunks(), status_code=up.status_code, media_type="text/event-stream"
+                        chunks(),
+                        status_code=up.status_code,
+                        media_type="text/event-stream",
                     )
                 except BaseException:
                     await up.aclose()
@@ -171,11 +183,15 @@ def load_models(device: str = "cuda:1"):
     class _Emb:
         def __init__(self):
             self.m = SentenceTransformer(
-                "AITeamVN/Vietnamese_Embedding", device=device, model_kwargs={"torch_dtype": torch.float16}
+                "AITeamVN/Vietnamese_Embedding",
+                device=device,
+                model_kwargs={"torch_dtype": torch.float16},
             )
 
         def encode(self, texts):
-            return self.m.encode(texts, batch_size=BATCH, normalize_embeddings=True).tolist()
+            return self.m.encode(
+                texts, batch_size=BATCH, normalize_embeddings=True
+            ).tolist()
 
     class _Rer:
         def __init__(self):

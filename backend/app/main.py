@@ -1,4 +1,5 @@
 """FastAPI app (`app.main:app`). Route khai báo kèm tiền tố /api (rewrite của Vercel giữ nguyên tiền tố)."""
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -21,12 +22,16 @@ MAX_BODY = 64 * 1024
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
-    app.state.http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=3.0))  # dùng chung: gateway + rate limit
+    app.state.http = httpx.AsyncClient(
+        timeout=httpx.Timeout(60.0, connect=3.0)
+    )  # dùng chung: gateway + rate limit
     app.state.gw = Gateway(s.LLM_BASE_URL, s.LLM_API_KEY, client=app.state.http)
     app.state.pool = None
     if s.DATABASE_URL:
         app.state.pool = make_pool(s.DATABASE_URL)
-        await app.state.pool.open(wait=False)  # DB chưa tới được thì từng request báo 503, app vẫn lên
+        await app.state.pool.open(
+            wait=False
+        )  # DB chưa tới được thì từng request báo 503, app vẫn lên
     try:
         yield
     finally:
@@ -49,7 +54,9 @@ class SecurityMiddleware:
             declared = dict(scope["headers"]).get(b"content-length", b"")
             if declared.isdigit() and int(declared) > MAX_BODY:
                 resp = JSONResponse(
-                    {"detail": "Yêu cầu quá lớn."}, status_code=413, headers={"x-content-type-options": "nosniff"}
+                    {"detail": "Yêu cầu quá lớn."},
+                    status_code=413,
+                    headers={"x-content-type-options": "nosniff"},
                 )
                 return await resp(scope, receive, send)
 
@@ -69,7 +76,11 @@ def _error(status: int, detail, headers: dict | None = None) -> JSONResponse:
     return JSONResponse(
         {"detail": detail},
         status_code=status,
-        headers={**(headers or {}), "x-content-type-options": "nosniff", "cache-control": "no-store"},
+        headers={
+            **(headers or {}),
+            "x-content-type-options": "nosniff",
+            "cache-control": "no-store",
+        },
     )
 
 

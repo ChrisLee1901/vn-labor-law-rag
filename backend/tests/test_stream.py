@@ -27,8 +27,17 @@ def test_sequence_order():
         s.finish(),
     ]
     types = [_parse(s.sse(c))["type"] for c in chunks]
-    assert types == ["start", "data-status", "source-url", "source-url",
-                     "text-start", "text-delta", "text-delta", "text-end", "finish"]
+    assert types == [
+        "start",
+        "data-status",
+        "source-url",
+        "source-url",
+        "text-start",
+        "text-delta",
+        "text-delta",
+        "text-end",
+        "finish",
+    ]
     assert _parse(s.DONE) == "[DONE]"
 
 
@@ -43,15 +52,23 @@ def test_headers():
 def test_builder_shapes():
     assert s.start("m1") == {"type": "start", "messageId": "m1"}
     assert s.source_url("a", "https://u", "T") == {
-        "type": "source-url", "sourceId": "a", "url": "https://u", "title": "T"}
+        "type": "source-url",
+        "sourceId": "a",
+        "url": "https://u",
+        "title": "T",
+    }
     assert s.text_start("t") == {"type": "text-start", "id": "t"}
     assert s.text_delta("t", "x") == {"type": "text-delta", "id": "t", "delta": "x"}
     assert s.text_end("t") == {"type": "text-end", "id": "t"}
     assert s.data_status("offline", "offline") == {
-        "type": "data-status", "data": {"llm": "offline", "mode": "offline"}}
+        "type": "data-status",
+        "data": {"llm": "offline", "mode": "offline"},
+    }
     assert s.data_trace("tr1") == {"type": "data-trace", "data": {"trace_id": "tr1"}}
     assert s.data_citation_warning(["X:D1"], ["Y:D2"]) == {
-        "type": "data-citation-warning", "data": {"invalid": ["X:D1"], "mismatch": ["Y:D2"]}}
+        "type": "data-citation-warning",
+        "data": {"invalid": ["X:D1"], "mismatch": ["Y:D2"]},
+    }
     assert s.error("lỗi") == {"type": "error", "errorText": "lỗi"}
     assert s.finish() == {"type": "finish"}
 

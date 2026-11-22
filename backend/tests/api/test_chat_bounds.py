@@ -1,4 +1,5 @@
 """Giới hạn thời gian của /api/chat, polling ngắt kết nối, flush Langfuse ngoài đường găng, lỗi chuẩn hóa."""
+
 import asyncio
 import time
 
@@ -14,12 +15,17 @@ from apimock import QUESTION, Gateway, parse_sse, types
 from fastapi.testclient import TestClient
 
 pytestmark = pytest.mark.usefixtures("seeded")
-NO_LANGFUSE = Settings(_env_file=None, LANGFUSE_PUBLIC_KEY=None, LANGFUSE_SECRET_KEY=None)
+NO_LANGFUSE = Settings(
+    _env_file=None, LANGFUSE_PUBLIC_KEY=None, LANGFUSE_SECRET_KEY=None
+)
 OVERTIME = "Mô hình trả lời quá lâu, vui lòng thử lại."
 
 
 def ask(client, text=QUESTION, history=()):
-    msgs = [*history, {"id": "u", "role": "user", "parts": [{"type": "text", "text": text}]}]
+    msgs = [
+        *history,
+        {"id": "u", "role": "user", "parts": [{"type": "text", "text": text}]},
+    ]
     return client.post("/api/chat", json={"messages": msgs})
 
 
@@ -28,21 +34,44 @@ def turn(role, text):
 
 
 def status(parts):
-    return next(p["data"] for p in parts if isinstance(p, dict) and p["type"] == "data-status")
+    return next(
+        p["data"] for p in parts if isinstance(p, dict) and p["type"] == "data-status"
+    )
 
 
 def urls(parts):
-    return [p["url"] for p in parts if isinstance(p, dict) and p["type"] == "source-url"]
+    return [
+        p["url"] for p in parts if isinstance(p, dict) and p["type"] == "source-url"
+    ]
 
 
 def doc():
     from datetime import date
 
-    return SourceDoc("S1", "ND293-2025:D3", "ND293-2025", "293/2025/NĐ-CP", 3, "t", "nd", date(2021, 1, 1), None, "con_hieu_luc", False)
+    return SourceDoc(
+        "S1",
+        "ND293-2025:D3",
+        "ND293-2025",
+        "293/2025/NĐ-CP",
+        3,
+        "t",
+        "nd",
+        date(2021, 1, 1),
+        None,
+        "con_hieu_luc",
+        False,
+    )
 
 
 def rag_plan():
-    return Plan("rag", "online", [("S1", "/van-ban/ND293-2025#D3", "t")], messages=[], docs=[doc()], meta={"mode": "rag"})
+    return Plan(
+        "rag",
+        "online",
+        [("S1", "/van-ban/ND293-2025#D3", "t")],
+        messages=[],
+        docs=[doc()],
+        meta={"mode": "rag"},
+    )
 
 
 class FakeClient:
@@ -102,16 +131,31 @@ async def collect(gen):
 # ---- 1. thời gian tối đa
 async def test_endless_nonsuspending_upstream_hits_deadline():
     gw, t0 = Upstream(), time.monotonic()
-    parts = await collect(event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE), deadline=time.monotonic() + 0.1))
-    assert types(parts)[-2:] == ["error", "[DONE]"] and parts[-2]["errorText"] == OVERTIME
+    parts = await collect(
+        event_stream(
+            rag_plan(), gw, Trace("q", NO_LANGFUSE), deadline=time.monotonic() + 0.1
+        )
+    )
+    assert (
+        types(parts)[-2:] == ["error", "[DONE]"] and parts[-2]["errorText"] == OVERTIME
+    )
     assert "finish" not in types(parts) and gw.closed and time.monotonic() - t0 < 3
 
 
 async def test_stalled_upstream_hits_deadline_via_timeout():
     gw, t0 = Upstream(stall_after=2), time.monotonic()
-    parts = await collect(event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE), deadline=time.monotonic() + 0.3))
-    assert types(parts).count("text-delta") == 2 and types(parts)[-2:] == ["error", "[DONE]"]
-    assert parts[-2]["errorText"] == OVERTIME and gw.closed and time.monotonic() - t0 < 3
+    parts = await collect(
+        event_stream(
+            rag_plan(), gw, Trace("q", NO_LANGFUSE), deadline=time.monotonic() + 0.3
+        )
+    )
+    assert types(parts).count("text-delta") == 2 and types(parts)[-2:] == [
+        "error",
+        "[DONE]",
+    ]
+    assert (
+        parts[-2]["errorText"] == OVERTIME and gw.closed and time.monotonic() - t0 < 3
+    )
 
 
 def test_endpoint_applies_chat_budget(client, monkeypatch):
@@ -120,7 +164,9 @@ def test_endpoint_applies_chat_budget(client, monkeypatch):
         gw.endless = True
         t0 = time.monotonic()
         parts = parse_sse(ask(client).text)
-    assert types(parts)[-2:] == ["error", "[DONE]"] and parts[-2]["errorText"] == OVERTIME
+    assert (
+        types(parts)[-2:] == ["error", "[DONE]"] and parts[-2]["errorText"] == OVERTIME
+    )
     assert time.monotonic() - t0 < 10
 
 
@@ -132,7 +178,10 @@ def test_embed_hang_falls_back_to_fts_within_step_timeout(client, monkeypatch):
         t0 = time.monotonic()
         parts = parse_sse(ask(client).text)
     assert time.monotonic() - t0 < 10
-    assert urls(parts) == ["/van-ban/ND293-2025#D3"] and types(parts)[-2:] == ["finish", "[DONE]"]
+    assert urls(parts) == ["/van-ban/ND293-2025#D3"] and types(parts)[-2:] == [
+        "finish",
+        "[DONE]",
+    ]
     assert calls == ["embed"]  # không rerank sau khi embed hỏng
 
 
@@ -141,12 +190,19 @@ def test_rerank_hang_falls_back_to_rrf_order(client, monkeypatch):
     with Gateway() as gw:
         gw.hang = {"rerank"}
         parts = parse_sse(ask(client).text)
-    assert urls(parts) and types(parts)[-2:] == ["finish", "[DONE]"] and status(parts)["mode"] == "rag"
+    assert (
+        urls(parts)
+        and types(parts)[-2:] == ["finish", "[DONE]"]
+        and status(parts)["mode"] == "rag"
+    )
 
 
 def test_condense_hang_uses_raw_question(client, monkeypatch):
     monkeypatch.setattr(chat_mod, "CONDENSE_TIMEOUT_S", 0.2)
-    hist = [turn("user", "Lương tối thiểu vùng I?"), turn("assistant", "5.310.000 đồng")]
+    hist = [
+        turn("user", "Lương tối thiểu vùng I?"),
+        turn("assistant", "5.310.000 đồng"),
+    ]
     with Gateway() as gw:
         gw.hang = {"condense"}
         parts = parse_sse(ask(client, "mức lương tối thiểu vùng II thì sao", hist).text)
@@ -195,7 +251,10 @@ def test_db_connection_not_held_during_embed_and_rerank(client):
     finally:
         client.app.state.pool = real
     assert held == {"embed": 0, "rerank": 0}
-    assert urls(parts) == ["/van-ban/ND293-2025#D3"] and types(parts)[-2:] == ["finish", "[DONE]"]
+    assert urls(parts) == ["/van-ban/ND293-2025#D3"] and types(parts)[-2:] == [
+        "finish",
+        "[DONE]",
+    ]
     assert pool.in_use == 0
 
 
@@ -211,26 +270,45 @@ class FakeRequest:
 
 async def test_disconnect_polled_every_8_deltas_stops_and_closes_upstream():
     gw = Upstream()
-    req = FakeRequest(gw, after=3)  # client đi sau 3 delta, được phát hiện ở lần poll kế (delta thứ 8)
+    req = FakeRequest(
+        gw, after=3
+    )  # client đi sau 3 delta, được phát hiện ở lần poll kế (delta thứ 8)
     fc = FakeClient()
-    chunks = [c async for c in event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE, client=fc), request=req)]
+    chunks = [
+        c
+        async for c in event_stream(
+            rag_plan(), gw, Trace("q", NO_LANGFUSE, client=fc), request=req
+        )
+    ]
     parts = parse_sse(b"".join(chunks).decode())
     assert gw.pulled == 8 and gw.closed and req.calls == 2
     assert types(parts).count("text-delta") == 8
     assert "finish" not in types(parts) and "[DONE]" not in types(parts)
-    assert fc.flushed == 1 and "end:chat" in fc.events  # đường hủy: flush có chặn thời gian
+    assert (
+        fc.flushed == 1 and "end:chat" in fc.events
+    )  # đường hủy: flush có chặn thời gian
 
 
 async def test_disconnect_checked_before_first_upstream_read():
     gw = Upstream()
-    parts = await collect(event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE), request=FakeRequest(gw, after=0)))
-    assert gw.pulled == 0 and "text-delta" not in types(parts) and "[DONE]" not in types(parts)
+    parts = await collect(
+        event_stream(
+            rag_plan(), gw, Trace("q", NO_LANGFUSE), request=FakeRequest(gw, after=0)
+        )
+    )
+    assert (
+        gw.pulled == 0
+        and "text-delta" not in types(parts)
+        and "[DONE]" not in types(parts)
+    )
 
 
 async def test_connected_client_streams_to_the_end():
     gw = Upstream(finite=20)
     req = FakeRequest(gw, after=10**9)
-    parts = await collect(event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE), request=req))
+    parts = await collect(
+        event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE), request=req)
+    )
     assert types(parts)[-2:] == ["finish", "[DONE]"] and req.calls == 3  # n = 0, 8, 16
 
 
@@ -252,7 +330,11 @@ def test_flush_runs_as_background_task_after_response(client, monkeypatch):
     with Gateway():
         r = ask(client)
     assert types(parse_sse(r.text))[-2:] == ["finish", "[DONE]"]
-    assert fc.events[-1] == "flush" and fc.flushed == 1 and fc.events.index("end:chat") < fc.events.index("flush")
+    assert (
+        fc.events[-1] == "flush"
+        and fc.flushed == 1
+        and fc.events.index("end:chat") < fc.events.index("flush")
+    )
 
 
 async def test_abort_path_flush_is_bounded_to_about_1s():
@@ -265,9 +347,16 @@ async def test_abort_path_flush_is_bounded_to_about_1s():
 
 # ---- minors
 def test_explicit_refs_from_raw_question_are_pinned_too(client):
-    hist = [turn("user", "Lương tối thiểu vùng I?"), turn("assistant", "5.310.000 đồng")]
-    with Gateway(condensed="mức lương tối thiểu vùng I") as gw:  # câu độc lập đã mất tham chiếu Điều 12
-        parts = parse_sse(ask(client, "Điều 12 Nghị định 145/2020/NĐ-CP thì sao", hist).text)
+    hist = [
+        turn("user", "Lương tối thiểu vùng I?"),
+        turn("assistant", "5.310.000 đồng"),
+    ]
+    with Gateway(
+        condensed="mức lương tối thiểu vùng I"
+    ) as gw:  # câu độc lập đã mất tham chiếu Điều 12
+        parts = parse_sse(
+            ask(client, "Điều 12 Nghị định 145/2020/NĐ-CP thì sao", hist).text
+        )
     assert gw.embed_inputs == ["mức lương tối thiểu vùng I"]
     got = urls(parts)
     assert got[0] == "/van-ban/ND145-2020#D12" and "/van-ban/ND293-2025#D3" in got
@@ -282,7 +371,12 @@ def test_invalid_input_never_calls_rate_limiter(client, monkeypatch):
         return True
 
     monkeypatch.setattr(ratelimit, "check", spy)
-    assert client.post("/api/chat", json={"messages": [turn("user", "a" * 1001)]}).status_code == 422
+    assert (
+        client.post(
+            "/api/chat", json={"messages": [turn("user", "a" * 1001)]}
+        ).status_code
+        == 422
+    )
     assert client.post("/api/chat", content=b"{bad").status_code == 422
     assert client.post("/api/chat", content=b"x" * 70000).status_code == 413
     assert calls == []
@@ -306,5 +400,8 @@ def test_standard_error_bodies_have_vietnamese_detail_and_safe_headers(env):
         ]
     for r, code, detail in cases:
         assert r.status_code == code and r.json() == {"detail": detail}, r.text
-        assert r.headers["x-content-type-options"] == "nosniff" and r.headers["cache-control"] == "no-store"
+        assert (
+            r.headers["x-content-type-options"] == "nosniff"
+            and r.headers["cache-control"] == "no-store"
+        )
     assert "POST" in cases[2][0].headers["allow"]

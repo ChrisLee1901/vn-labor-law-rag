@@ -38,7 +38,9 @@ def test_unaccented_and_nfd():
 
     assert extract_as_of("luong toi thieu nam 2027", T) == date(2027, 1, 1)
     assert extract_as_of("tu ngay 01/01/2027 luong", T) == date(2027, 1, 1)
-    assert extract_as_of(unicodedata.normalize("NFD", "lương năm 2027"), T) == date(2027, 1, 1)
+    assert extract_as_of(unicodedata.normalize("NFD", "lương năm 2027"), T) == date(
+        2027, 1, 1
+    )
     assert extract_as_of("Luat bao hiem xa hoi nam 2014", T) == T
 
 

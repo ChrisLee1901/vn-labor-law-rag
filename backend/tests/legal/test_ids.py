@@ -25,7 +25,9 @@ def test_parse_id_article_only_and_suffix():
     assert parse_id("BLLD:D2a:K1") == ("BLLD", 2, 1, None)
 
 
-@pytest.mark.parametrize("bad", ["", "BLLD", "BLLD:D", "BLLD:K1", "BLLD:D1:a", "BLLD:D1:K1:A"])
+@pytest.mark.parametrize(
+    "bad", ["", "BLLD", "BLLD:D", "BLLD:K1", "BLLD:D1:a", "BLLD:D1:K1:A"]
+)
 def test_parse_id_rejects_malformed(bad):
     with pytest.raises(ValueError):
         parse_id(bad)
@@ -37,4 +39,6 @@ def test_appendix_id_roundtrip():
     assert make_appendix_id("ND293-2025", 1) == "ND293-2025:PL1"
     assert make_appendix_id("ND293-2025", 1, 3) == "ND293-2025:PL1:M3"
     assert is_appendix_id("ND293-2025:PL1:M3") and is_appendix_id("ND293-2025:PL1")
-    assert not is_appendix_id("ND293-2025:D3") and not is_appendix_id("ND293-2025:PL1:K3")
+    assert not is_appendix_id("ND293-2025:D3") and not is_appendix_id(
+        "ND293-2025:PL1:K3"
+    )

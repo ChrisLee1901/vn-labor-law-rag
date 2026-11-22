@@ -3,6 +3,7 @@
 Dùng `start_observation` (không dùng context manager) để không phụ thuộc contextvars qua các `yield` của stream.
 Mọi lỗi của Langfuse bị nuốt: tracing không bao giờ làm hỏng request.
 """
+
 import logging
 import uuid
 from contextlib import contextmanager
@@ -57,7 +58,10 @@ class Trace:
         if self._client is not None:
             try:
                 self._root = self._client.start_observation(
-                    trace_context={"trace_id": self.trace_id}, name="chat", as_type="span", input=redact_pii(question)
+                    trace_context={"trace_id": self.trace_id},
+                    name="chat",
+                    as_type="span",
+                    input=redact_pii(question),
                 )
             except Exception:
                 log.warning("langfuse trace start failed", exc_info=True)

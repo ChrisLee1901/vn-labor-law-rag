@@ -5,6 +5,7 @@ from app.main import create_app
 from apimock import GW
 from fastapi.testclient import TestClient
 
+
 @pytest.fixture(autouse=True)
 def _fresh_caches():
     deps.reset_caches()
@@ -18,7 +19,13 @@ def _fresh_caches():
 def env(monkeypatch, tmp_path, db_url):
     """Settings từ env (cwd rỗng nên không đọc .env); test có thể monkeypatch thêm trước khi tạo client."""
     monkeypatch.chdir(tmp_path)
-    for k in ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"):
+    for k in (
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY",
+        "LANGFUSE_HOST",
+    ):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("DATABASE_URL", db_url)
     monkeypatch.setenv("LLM_BASE_URL", GW)
@@ -36,7 +43,9 @@ def client(env):
 @pytest.fixture
 def seeded(sync_conn):
     c = sync_conn
-    c.execute("delete from canned_answers; delete from feedback; delete from chunks; delete from articles; delete from legal_refs; delete from legal_docs")
+    c.execute(
+        "delete from canned_answers; delete from feedback; delete from chunks; delete from articles; delete from legal_refs; delete from legal_docs"
+    )
     c.execute("update app_config set value = '0.35' where key = 'refusal_tau'")
     c.execute(
         """insert into legal_docs(code, number, title, doc_type, effective_from, status) values
@@ -44,8 +53,20 @@ def seeded(sync_conn):
            ('ND145-2020','145/2020/NĐ-CP','Hướng dẫn BLLĐ','nghi_dinh','2021-02-01','con_hieu_luc')"""
     )
     for code, art, title, text, na in [
-        ("ND293-2025", 3, "Mức lương tối thiểu", "mức lương tối thiểu vùng I là 5.310.000 đồng", "muc luong toi thieu vung I la 5.310.000 dong"),
-        ("ND145-2020", 12, "Làm thêm giờ", "điều kiện làm thêm giờ", "dieu kien lam them gio"),
+        (
+            "ND293-2025",
+            3,
+            "Mức lương tối thiểu",
+            "mức lương tối thiểu vùng I là 5.310.000 đồng",
+            "muc luong toi thieu vung I la 5.310.000 dong",
+        ),
+        (
+            "ND145-2020",
+            12,
+            "Làm thêm giờ",
+            "điều kiện làm thêm giờ",
+            "dieu kien lam them gio",
+        ),
     ]:
         pid = f"{code}:D{art}"
         c.execute(

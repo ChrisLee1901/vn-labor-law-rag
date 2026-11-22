@@ -10,7 +10,10 @@ QUESTION = "Mức lương tối thiểu vùng I là bao nhiêu?"
 
 
 def sse_body(*deltas: str) -> bytes:
-    chunks = [json.dumps({"choices": [{"delta": {"content": d}}]}, ensure_ascii=False) for d in deltas] + ["[DONE]"]
+    chunks = [
+        json.dumps({"choices": [{"delta": {"content": d}}]}, ensure_ascii=False)
+        for d in deltas
+    ] + ["[DONE]"]
     return "".join(f"data: {c}\n\n" for c in chunks).encode()
 
 
@@ -30,7 +33,13 @@ def types(parts) -> list[str]:
 class Gateway:
     """respx mock của gateway Kaggle; `chat` ghi lại mọi call (stream và không stream)."""
 
-    def __init__(self, online=True, rerank=0.9, answer=("Mức lương vùng I là 5.310.000 đồng [S1].",), condensed="câu hỏi độc lập"):
+    def __init__(
+        self,
+        online=True,
+        rerank=0.9,
+        answer=("Mức lương vùng I là 5.310.000 đồng [S1].",),
+        condensed="câu hỏi độc lập",
+    ):
         self.mock = respx.mock(assert_all_called=False)
         self.chat_bodies: list[dict] = []
         self.embed_inputs: list[str] = []
@@ -40,7 +49,9 @@ class Gateway:
         self.condense_fails = False
         self.stream_error = False
         self.online = online
-        self.hang: set[str] = set()  # {"condense", "embed", "rerank", "stream"}: treo cho tới khi bị hủy
+        self.hang: set[str] = (
+            set()
+        )  # {"condense", "embed", "rerank", "stream"}: treo cho tới khi bị hủy
         self.endless = False  # stream không bao giờ kết thúc
         self.probe = None  # callable(name) gọi khi embed / rerank tới gateway
 
@@ -52,8 +63,11 @@ class Gateway:
                 await asyncio.sleep(60)
             if self.condense_fails:
                 return httpx.Response(500)
-            return httpx.Response(200, json={"choices": [{"message": {"content": self.condensed}}]})
+            return httpx.Response(
+                200, json={"choices": [{"message": {"content": self.condensed}}]}
+            )
         if self.endless:
+
             async def forever():
                 while True:
                     yield sse_body("lặp ")[:-DONE_LEN]
@@ -61,6 +75,7 @@ class Gateway:
 
             return httpx.Response(200, content=forever())
         if self.stream_error:
+
             async def boom():
                 for d in self.answer[:2]:
                     yield sse_body(d)[: -len(b"data: [DONE]\n\n")]
@@ -76,7 +91,14 @@ class Gateway:
             await asyncio.sleep(60)
         texts = json.loads(request.content)["input"]
         self.embed_inputs += texts
-        return httpx.Response(200, json={"data": [{"index": i, "embedding": [0.01] * 1024} for i in range(len(texts))]})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"index": i, "embedding": [0.01] * 1024} for i in range(len(texts))
+                ]
+            },
+        )
 
     async def _rerank(self, request: httpx.Request) -> httpx.Response:
         if self.probe:
@@ -84,7 +106,15 @@ class Gateway:
         if "rerank" in self.hang:
             await asyncio.sleep(60)
         docs = json.loads(request.content)["documents"]
-        return httpx.Response(200, json={"results": [{"index": i, "relevance_score": self.rerank_score} for i in range(len(docs))]})
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": i, "relevance_score": self.rerank_score}
+                    for i in range(len(docs))
+                ]
+            },
+        )
 
     def __enter__(self):
         self.mock.__enter__()
@@ -93,7 +123,9 @@ class Gateway:
             self.health_route.respond(json={"status": "ok", "llm": True})
         else:
             self.health_route.respond(503)
-        self.chat_route = self.mock.post(f"{GW}/v1/chat/completions").mock(side_effect=self._chat)
+        self.chat_route = self.mock.post(f"{GW}/v1/chat/completions").mock(
+            side_effect=self._chat
+        )
         self.mock.post(f"{GW}/v1/embeddings").mock(side_effect=self._embed)
         self.mock.post(f"{GW}/v1/rerank").mock(side_effect=self._rerank)
         return self

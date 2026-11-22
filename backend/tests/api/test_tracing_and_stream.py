@@ -11,7 +11,9 @@ from app.retrieval.expand import SourceDoc
 from app.tracing import Trace
 from apimock import parse_sse, types
 
-NO_LANGFUSE = Settings(_env_file=None, LANGFUSE_PUBLIC_KEY=None, LANGFUSE_SECRET_KEY=None)
+NO_LANGFUSE = Settings(
+    _env_file=None, LANGFUSE_PUBLIC_KEY=None, LANGFUSE_SECRET_KEY=None
+)
 
 
 # ---- pii
@@ -22,7 +24,12 @@ def test_redact_pii():
 
 @pytest.mark.parametrize(
     "text",
-    ["gọi +84912345678 nhé", "mail a.b+c@example.com ok", "CMND 079123456 cũ", "cccd:012345678901."],
+    [
+        "gọi +84912345678 nhé",
+        "mail a.b+c@example.com ok",
+        "CMND 079123456 cũ",
+        "cccd:012345678901.",
+    ],
 )
 def test_redact_pii_variants(text):
     out = redact_pii(text)
@@ -50,7 +57,13 @@ def test_noop_trace_is_complete_and_safe():
 # ---- tracing with a fake Langfuse client
 class FakeObs:
     def __init__(self, log, name, kw):
-        self.log, self.name, self.kw, self.updates, self.ended = log, name, kw, [], False
+        self.log, self.name, self.kw, self.updates, self.ended = (
+            log,
+            name,
+            kw,
+            [],
+            False,
+        )
         log.append(self)
 
     def start_observation(self, **kw):
@@ -78,15 +91,39 @@ def test_trace_records_spans_redacted_input_and_metadata():
     fc = FakeClient()
     t = Trace("sđt 0912345678 hỏi gì", NO_LANGFUSE, client=fc)
     root = fc.obs[0]
-    assert root.kw["trace_context"] == {"trace_id": t.trace_id} and "0912345678" not in root.kw["input"]
+    assert (
+        root.kw["trace_context"] == {"trace_id": t.trace_id}
+        and "0912345678" not in root.kw["input"]
+    )
     for name in ("condense", "embed", "hybrid_search", "rerank", "expand", "llm"):
         with t.span(name):
             pass
-    t.finish("trả lời cho 0912345678", {"index_version": 1, "mode": "rag", "prompt_version": "answer_v1", "as_of": "2026-01-01"})
-    assert [o.name for o in fc.obs] == ["chat", "condense", "embed", "hybrid_search", "rerank", "expand", "llm"]
+    t.finish(
+        "trả lời cho 0912345678",
+        {
+            "index_version": 1,
+            "mode": "rag",
+            "prompt_version": "answer_v1",
+            "as_of": "2026-01-01",
+        },
+    )
+    assert [o.name for o in fc.obs] == [
+        "chat",
+        "condense",
+        "embed",
+        "hybrid_search",
+        "rerank",
+        "expand",
+        "llm",
+    ]
     assert all(o.ended for o in fc.obs)
     upd = root.updates[0]
-    assert upd["metadata"] == {"index_version": "1", "mode": "rag", "prompt_version": "answer_v1", "as_of": "2026-01-01"}
+    assert upd["metadata"] == {
+        "index_version": "1",
+        "mode": "rag",
+        "prompt_version": "answer_v1",
+        "as_of": "2026-01-01",
+    }
     assert "0912345678" not in upd["output"]
 
 
@@ -141,7 +178,12 @@ def test_get_client_none_without_keys_and_survives_init_error(monkeypatch):
         raise RuntimeError("bad key")
 
     monkeypatch.setattr(tracing, "_client", boom)
-    assert tracing.get_client(Settings(_env_file=None, LANGFUSE_PUBLIC_KEY="p", LANGFUSE_SECRET_KEY="s")) is None
+    assert (
+        tracing.get_client(
+            Settings(_env_file=None, LANGFUSE_PUBLIC_KEY="p", LANGFUSE_SECRET_KEY="s")
+        )
+        is None
+    )
 
 
 async def test_close_trace_flushes_in_thread():
@@ -155,7 +197,19 @@ async def test_close_trace_flushes_in_thread():
 def doc():
     from datetime import date
 
-    return SourceDoc("S1", "ND293-2025:D3", "ND293-2025", "293/2025/NĐ-CP", 3, "Mức lương", "nd", date(2021, 1, 1), None, "con_hieu_luc", False)
+    return SourceDoc(
+        "S1",
+        "ND293-2025:D3",
+        "ND293-2025",
+        "293/2025/NĐ-CP",
+        3,
+        "Mức lương",
+        "nd",
+        date(2021, 1, 1),
+        None,
+        "con_hieu_luc",
+        False,
+    )
 
 
 class FakeGw:
@@ -174,7 +228,14 @@ class FakeGw:
 
 
 def rag_plan():
-    return Plan("rag", "online", [("S1", "/van-ban/ND293-2025#D3", "t")], messages=[], docs=[doc()], meta={"mode": "rag"})
+    return Plan(
+        "rag",
+        "online",
+        [("S1", "/van-ban/ND293-2025#D3", "t")],
+        messages=[],
+        docs=[doc()],
+        meta={"mode": "rag"},
+    )
 
 
 async def collect(gen):
@@ -184,12 +245,25 @@ async def collect(gen):
 async def test_event_stream_happy_path_and_trace_finish():
     fc = FakeClient()
     gw = FakeGw(["Điều 3 ", "[S1]"])
-    parts = await collect(event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE, client=fc)))
+    parts = await collect(
+        event_stream(rag_plan(), gw, Trace("q", NO_LANGFUSE, client=fc))
+    )
     assert types(parts) == [
-        "start", "data-status", "source-url", "text-start", "text-delta", "text-delta", "text-end", "data-trace", "finish", "[DONE]",
+        "start",
+        "data-status",
+        "source-url",
+        "text-start",
+        "text-delta",
+        "text-delta",
+        "text-end",
+        "data-trace",
+        "finish",
+        "[DONE]",
     ]
     assert gw.closed and fc.flushed == 0  # flush chạy ở BackgroundTask sau response
-    assert [o.name for o in fc.obs] == ["chat", "llm"] and fc.obs[0].updates[0]["output"] == "Điều 3 [S1]"
+    assert [o.name for o in fc.obs] == ["chat", "llm"] and fc.obs[0].updates[0][
+        "output"
+    ] == "Điều 3 [S1]"
 
 
 async def test_event_stream_llm_offline_before_first_token_is_error_then_done():
@@ -229,7 +303,20 @@ async def test_event_stream_lone_surrogate_does_not_crash():
 
 async def test_event_stream_fixed_text_modes_do_not_call_llm():
     gw = FakeGw(["nope"])
-    plan = Plan("refused", "offline", text="Tôi không tìm thấy căn cứ trong các văn bản hiện có.")
+    plan = Plan(
+        "refused",
+        "offline",
+        text="Tôi không tìm thấy căn cứ trong các văn bản hiện có.",
+    )
     parts = await collect(event_stream(plan, gw, Trace("q", NO_LANGFUSE)))
-    assert types(parts) == ["start", "data-status", "text-start", "text-delta", "text-end", "data-trace", "finish", "[DONE]"]
+    assert types(parts) == [
+        "start",
+        "data-status",
+        "text-start",
+        "text-delta",
+        "text-end",
+        "data-trace",
+        "finish",
+        "[DONE]",
+    ]
     assert not gw.closed

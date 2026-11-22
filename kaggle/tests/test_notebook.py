@@ -6,7 +6,9 @@ import build_notebook
 
 KAGGLE = Path(__file__).resolve().parents[1]
 NB_PATH = KAGGLE / "serve.ipynb"
-GATEWAY = (KAGGLE / "gateway.py").read_bytes().decode("utf-8").replace("\r\n", "\n")  # repo is eol=lf
+GATEWAY = (
+    (KAGGLE / "gateway.py").read_bytes().decode("utf-8").replace("\r\n", "\n")
+)  # repo is eol=lf
 WRITEFILE = "%%writefile gateway.py\n"
 
 ORDER = ["1", "2", "3", "gateway", "5", "6", "7", "8", "9"]
@@ -47,7 +49,7 @@ def test_cell_order():
 
 def test_embedded_gateway_matches_file():
     cell = next(c for c in _nb()["cells"] if _src(c).startswith(WRITEFILE))
-    assert _src(cell)[len(WRITEFILE):] == GATEWAY
+    assert _src(cell)[len(WRITEFILE) :] == GATEWAY
 
 
 def test_committed_notebook_is_fresh():
@@ -62,7 +64,9 @@ def test_code_cells_compile():
 
 
 def test_no_secret_values_printed():
-    risky = re.compile(r"os\.environ|get_secret|AUTHTOKEN|HF_TOKEN|API_KEY|token|key", re.I)
+    risky = re.compile(
+        r"os\.environ|get_secret|AUTHTOKEN|HF_TOKEN|API_KEY|token|key", re.I
+    )
     for c in _nb()["cells"]:
         src = _src(c)
         if c["cell_type"] == "code" and not src.startswith("%%"):

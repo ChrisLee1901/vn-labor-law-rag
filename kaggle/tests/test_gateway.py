@@ -29,11 +29,15 @@ def client():
 def test_requires_bearer(client):
     body = {"input": ["a"]}
     assert client.post("/v1/embeddings", json=body).status_code == 401
-    bad = client.post("/v1/embeddings", json=body, headers={"Authorization": "Bearer nope"})
+    bad = client.post(
+        "/v1/embeddings", json=body, headers={"Authorization": "Bearer nope"}
+    )
     assert bad.status_code == 401
     assert bad.json() == {"detail": "unauthorized"}
     with respx.mock:
-        respx.get(f"{LLM}/health").mock(return_value=httpx.Response(200, json={"status": "ok"}))
+        respx.get(f"{LLM}/health").mock(
+            return_value=httpx.Response(200, json={"status": "ok"})
+        )
         assert client.get("/health").status_code == 200
 
 
@@ -54,7 +58,9 @@ def test_embeddings_input_limit(client):
 
 def test_rerank_sorted_and_bounded(client):
     docs = [f"d{i}" for i in range(6)]
-    r = client.post("/v1/rerank", json={"query": "q", "documents": docs, "top_n": 4}, headers=AUTH)
+    r = client.post(
+        "/v1/rerank", json={"query": "q", "documents": docs, "top_n": 4}, headers=AUTH
+    )
     assert r.status_code == 200
     res = r.json()["results"]
     scores = [x["relevance_score"] for x in res]
@@ -67,14 +73,19 @@ def test_rerank_sorted_and_bounded(client):
 def test_chat_proxy_streams_chunks(client):
     sse = b'data: {"n":1}\n\ndata: {"n":2}\n\ndata: [DONE]\n\n'
     respx.post(f"{LLM}/v1/chat/completions").mock(
-        return_value=httpx.Response(200, content=sse, headers={"content-type": "text/event-stream"})
+        return_value=httpx.Response(
+            200, content=sse, headers={"content-type": "text/event-stream"}
+        )
     )
     with client.stream(
-        "POST", "/v1/chat/completions", json={"stream": True, "messages": []}, headers=AUTH
+        "POST",
+        "/v1/chat/completions",
+        json={"stream": True, "messages": []},
+        headers=AUTH,
     ) as r:
         assert r.status_code == 200
         assert r.headers["content-type"].startswith("text/event-stream")
-        lines = [l for l in r.iter_lines() if l]
+        lines = [ln for ln in r.iter_lines() if ln]
     assert lines == ['data: {"n":1}', 'data: {"n":2}', "data: [DONE]"]
 
 
@@ -91,7 +102,9 @@ def test_chat_non_stream_and_unreachable(client):
 
 @respx.mock
 def test_health_loading_when_llm_not_ok(client):
-    respx.get(f"{LLM}/health").mock(return_value=httpx.Response(503, json={"status": "loading"}))
+    respx.get(f"{LLM}/health").mock(
+        return_value=httpx.Response(503, json={"status": "loading"})
+    )
     h = client.get("/health").json()
     assert h["llm"] is False
     assert h["status"] == "loading"
@@ -104,13 +117,21 @@ def test_docs_and_openapi_not_exposed(client):
 
 
 def test_unauthenticated_malformed_json_gets_401(client):
-    r = client.post("/v1/chat/completions", content=b"{not json", headers={"content-type": "application/json"})
+    r = client.post(
+        "/v1/chat/completions",
+        content=b"{not json",
+        headers={"content-type": "application/json"},
+    )
     assert r.status_code == 401
 
 
 def test_oversized_body_413(client):
     big = b'{"input": ["' + b"a" * 1_100_000 + b'"]}'
-    r = client.post("/v1/embeddings", content=big, headers={**AUTH, "content-type": "application/json"})
+    r = client.post(
+        "/v1/embeddings",
+        content=big,
+        headers={**AUTH, "content-type": "application/json"},
+    )
     assert r.status_code == 413
 
     def gen():  # chunked, no content-length
@@ -119,7 +140,11 @@ def test_oversized_body_413(client):
             yield b"a" * 100_000
         yield b'"]}'
 
-    r = client.post("/v1/embeddings", content=gen(), headers={**AUTH, "content-type": "application/json"})
+    r = client.post(
+        "/v1/embeddings",
+        content=gen(),
+        headers={**AUTH, "content-type": "application/json"},
+    )
     assert r.status_code == 413
 
 
@@ -130,13 +155,22 @@ def test_empty_api_key_rejected():
 
 def test_missing_models_503():
     c = TestClient(create_app(None, None, LLM, KEY))
-    assert c.post("/v1/embeddings", json={"input": ["a"]}, headers=AUTH).status_code == 503
-    assert c.post("/v1/rerank", json={"query": "q", "documents": ["a"]}, headers=AUTH).status_code == 503
+    assert (
+        c.post("/v1/embeddings", json={"input": ["a"]}, headers=AUTH).status_code == 503
+    )
+    assert (
+        c.post(
+            "/v1/rerank", json={"query": "q", "documents": ["a"]}, headers=AUTH
+        ).status_code
+        == 503
+    )
 
 
 @respx.mock
 def test_chat_non_json_upstream_502(client):
-    respx.post(f"{LLM}/v1/chat/completions").mock(return_value=httpx.Response(200, content=b"<html>"))
+    respx.post(f"{LLM}/v1/chat/completions").mock(
+        return_value=httpx.Response(200, content=b"<html>")
+    )
     r = client.post("/v1/chat/completions", json={"messages": []}, headers=AUTH)
     assert r.status_code == 502 and r.json() == {"detail": "llm bad response"}
 
@@ -168,11 +202,15 @@ def test_model_calls_are_serialized():
     emb, rer = Probe(), Probe()
     c = TestClient(create_app(emb, rer, LLM, KEY))
     threads = [
-        threading.Thread(target=lambda: c.post("/v1/embeddings", json={"input": ["a"]}, headers=AUTH))
+        threading.Thread(
+            target=lambda: c.post("/v1/embeddings", json={"input": ["a"]}, headers=AUTH)
+        )
         for _ in range(4)
     ] + [
         threading.Thread(
-            target=lambda: c.post("/v1/rerank", json={"query": "q", "documents": ["a"]}, headers=AUTH)
+            target=lambda: c.post(
+                "/v1/rerank", json={"query": "q", "documents": ["a"]}, headers=AUTH
+            )
         )
         for _ in range(4)
     ]
@@ -199,14 +237,24 @@ async def test_upstream_closed_on_client_disconnect():
             closed.set()
 
     respx.post(f"{LLM}/v1/chat/completions").mock(
-        return_value=httpx.Response(200, stream=Stream(), headers={"content-type": "text/event-stream"})
+        return_value=httpx.Response(
+            200, stream=Stream(), headers={"content-type": "text/event-stream"}
+        )
     )
     app = create_app(FakeEmbedder(), FakeReranker(), LLM, KEY)
     body = json.dumps({"stream": True, "messages": []}).encode()
     scope = {
-        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1",
-        "method": "POST", "path": "/v1/chat/completions", "raw_path": b"/v1/chat/completions",
-        "query_string": b"", "root_path": "", "scheme": "http", "server": ("t", 80), "client": ("c", 1),
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "raw_path": b"/v1/chat/completions",
+        "query_string": b"",
+        "root_path": "",
+        "scheme": "http",
+        "server": ("t", 80),
+        "client": ("c", 1),
         "headers": [
             (b"authorization", f"Bearer {KEY}".encode()),
             (b"content-type", b"application/json"),

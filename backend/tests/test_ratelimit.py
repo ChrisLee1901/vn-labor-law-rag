@@ -88,10 +88,17 @@ async def test_total_deadline_fails_open(monkeypatch, caplog):
 async def test_global_cap(up):
     async with httpx.AsyncClient() as c:  # one client: building 300 is slow
         for i in range(300):
-            assert await ratelimit.check(f"10.0.{i // 250}.{i % 250}", settings=S, client=c, now=1000.0)
-        assert await ratelimit.check("9.9.9.9", settings=S, client=c, now=1000.0) is False
+            assert await ratelimit.check(
+                f"10.0.{i // 250}.{i % 250}", settings=S, client=c, now=1000.0
+            )
+        assert (
+            await ratelimit.check("9.9.9.9", settings=S, client=c, now=1000.0) is False
+        )
         # next day: allowed again
-        assert await ratelimit.check("9.9.9.9", settings=S, client=c, now=1000.0 + 86400) is True
+        assert (
+            await ratelimit.check("9.9.9.9", settings=S, client=c, now=1000.0 + 86400)
+            is True
+        )
 
 
 async def test_raw_ip_not_sent(up):
@@ -107,7 +114,10 @@ async def test_raw_ip_not_sent(up):
 async def test_ipv6_normalised_and_invalid_shared(up):
     await ratelimit.check("2001:DB8::1", settings=S, now=1000.0)
     await ratelimit.check("2001:0db8:0:0:0:0:0:1", settings=S, now=1000.0)
-    assert max(up.counts.values()) == 2 and len([k for k in up.counts if k.startswith("ip:")]) == 1
+    assert (
+        max(up.counts.values()) == 2
+        and len([k for k in up.counts if k.startswith("ip:")]) == 1
+    )
     assert ratelimit._ip_key("", 0) == ratelimit._ip_key("garbage", 0)
 
 
@@ -127,12 +137,15 @@ async def test_timeout_fails_open_and_warns(caplog):
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
-@pytest.mark.parametrize("resp", [
-    httpx.Response(500, text="boom"),
-    httpx.Response(200, text="not json"),
-    httpx.Response(200, json=[{"error": "ERR"}]),
-    httpx.Response(200, json={"result": 1}),
-])
+@pytest.mark.parametrize(
+    "resp",
+    [
+        httpx.Response(500, text="boom"),
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json=[{"error": "ERR"}]),
+        httpx.Response(200, json={"result": 1}),
+    ],
+)
 async def test_bad_response_fails_open(resp, caplog):
     with respx.mock:
         respx.post(f"{URL}/pipeline").mock(return_value=resp)
@@ -152,12 +165,21 @@ async def test_missing_settings_fails_open(caplog):
 
 
 def _req(headers: dict[str, str], client=("9.9.9.9", 1)) -> Request:
-    return Request({"type": "http", "headers": [(k.encode(), v.encode()) for k, v in headers.items()],
-                    "client": client})
+    return Request(
+        {
+            "type": "http",
+            "headers": [(k.encode(), v.encode()) for k, v in headers.items()],
+            "client": client,
+        }
+    )
 
 
 def test_client_ip_precedence():
-    h = {"x-vercel-forwarded-for": "1.1.1.1", "x-real-ip": "2.2.2.2", "x-forwarded-for": "3.3.3.3, 4.4.4.4"}
+    h = {
+        "x-vercel-forwarded-for": "1.1.1.1",
+        "x-real-ip": "2.2.2.2",
+        "x-forwarded-for": "3.3.3.3, 4.4.4.4",
+    }
     assert ratelimit.client_ip(_req(h)) == "1.1.1.1"
     del h["x-vercel-forwarded-for"]
     assert ratelimit.client_ip(_req(h)) == "2.2.2.2"

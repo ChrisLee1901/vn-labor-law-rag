@@ -6,7 +6,9 @@ from pathlib import Path
 
 from app import stream
 
-DOC = (Path(__file__).resolve().parents[2] / "docs" / "api-contract.md").read_text(encoding="utf-8")
+DOC = (Path(__file__).resolve().parents[2] / "docs" / "api-contract.md").read_text(
+    encoding="utf-8"
+)
 ENDPOINTS = {
     ("POST", "/api/chat"),
     ("GET", "/api/health"),
@@ -23,7 +25,11 @@ ORDER = (
 
 def table_endpoints(doc: str) -> set[tuple[str, str]]:
     """(METHOD, path) của các dòng bảng dạng `| POST | `/api/chat` | ...`."""
-    return set(re.findall(r"^\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(/api/[^`]*)`", doc, re.M))
+    return set(
+        re.findall(
+            r"^\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(/api/[^`]*)`", doc, re.M
+        )
+    )
 
 
 def missing_from_doc(doc: str) -> list[str]:
@@ -43,18 +49,33 @@ def emitted_types() -> set[str]:
     for name, fn in inspect.getmembers(stream, inspect.isfunction):
         if fn.__module__ != stream.__name__ or name == "sse":
             continue
-        args = [[] if "list" in str(p.annotation) else "x" for p in inspect.signature(fn).parameters.values()]
+        args = [
+            [] if "list" in str(p.annotation) else "x"
+            for p in inspect.signature(fn).parameters.values()
+        ]
         types.add(fn(*args)["type"])
     return types
 
 
 def test_contract_complete():
-    assert {"start", "data-status", "data-trace", "data-citation-warning", "source-url", "error", "finish"} <= emitted_types()
+    assert {
+        "start",
+        "data-status",
+        "data-trace",
+        "data-citation-warning",
+        "source-url",
+        "error",
+        "finish",
+    } <= emitted_types()
     assert missing_from_doc(DOC) == []
 
 
 def test_guard_detects_removed_docs_row():
-    broken = "\n".join(line for line in DOC.splitlines() if not re.match(r"^\|\s*GET\s*\|\s*`/api/docs`\s*\|", line))
+    broken = "\n".join(
+        line
+        for line in DOC.splitlines()
+        if not re.match(r"^\|\s*GET\s*\|\s*`/api/docs`\s*\|", line)
+    )
     assert missing_from_doc(broken) == ["GET /api/docs"]
 
 
@@ -76,9 +97,20 @@ def test_error_details_in_code_are_documented():
     from app.api.chat import OVERTIME_TEXT, RATE_LIMITED, STREAM_ERROR
     from app.api.deps import DB_DOWN
 
-    for text in (RATE_LIMITED, DB_DOWN, STREAM_ERROR, OVERTIME_TEXT, "Yêu cầu quá lớn.", "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.",
-                 "Không tìm thấy đường dẫn.", "Phương thức không được hỗ trợ."):
+    for text in (
+        RATE_LIMITED,
+        DB_DOWN,
+        STREAM_ERROR,
+        OVERTIME_TEXT,
+        "Yêu cầu quá lớn.",
+        "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.",
+        "Không tìm thấy đường dẫn.",
+        "Phương thức không được hỗ trợ.",
+    ):
         assert text in DOC, text
     row503 = next(line for line in DOC.splitlines() if line.startswith("| 503 |"))
     assert "/api/cron/keepalive" in row503
-    assert any(line.startswith("| 413 |") and "/api/chat" in line and "/api/feedback" in line for line in DOC.splitlines())
+    assert any(
+        line.startswith("| 413 |") and "/api/chat" in line and "/api/feedback" in line
+        for line in DOC.splitlines()
+    )

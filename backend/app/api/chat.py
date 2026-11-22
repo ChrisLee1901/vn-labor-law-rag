@@ -1,4 +1,5 @@
 """POST /api/chat: kiểm tra đầu vào -> rate limit -> truy hồi (mọi thứ có thể lỗi HTTP) -> stream SSE (lỗi thành chunk `error`)."""
+
 import asyncio
 import logging
 import re
@@ -46,8 +47,12 @@ _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 class Plan:
     mode: str  # rag | offline | refused
     llm: str  # online | offline
-    sources: list[tuple[str, str, str]] = field(default_factory=list)  # (sid, url, title)
-    text: str | None = None  # văn bản cố định (offline/refused/canned); None khi mode == rag
+    sources: list[tuple[str, str, str]] = field(
+        default_factory=list
+    )  # (sid, url, title)
+    text: str | None = (
+        None  # văn bản cố định (offline/refused/canned); None khi mode == rag
+    )
     messages: list[dict] | None = None
     docs: list[SourceDoc] = field(default_factory=list)
     meta: dict = field(default_factory=dict)
@@ -57,7 +62,11 @@ def _text(m: dict) -> str:
     parts = m.get("parts")
     if isinstance(parts, list):
         return "".join(
-            p["text"] for p in parts if isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str)
+            p["text"]
+            for p in parts
+            if isinstance(p, dict)
+            and p.get("type") == "text"
+            and isinstance(p.get("text"), str)
         )
     return m["content"] if isinstance(m.get("content"), str) else ""
 
@@ -68,12 +77,18 @@ def parse_chat(body) -> tuple[str, list[dict], date | None]:
     def bad(msg: str):
         raise HTTPException(422, msg)
 
-    if not isinstance(body, dict) or not isinstance(body.get("messages"), list) or not body["messages"]:
+    if (
+        not isinstance(body, dict)
+        or not isinstance(body.get("messages"), list)
+        or not body["messages"]
+    ):
         bad("Cần ít nhất một tin nhắn.")
     msgs = body["messages"]
     if len(msgs) > MAX_MESSAGES:
         bad(f"Cuộc trò chuyện quá dài (tối đa {MAX_MESSAGES} tin nhắn).")
-    if not all(isinstance(m, dict) and m.get("role") in ("user", "assistant") for m in msgs):
+    if not all(
+        isinstance(m, dict) and m.get("role") in ("user", "assistant") for m in msgs
+    ):
         bad("Tin nhắn không hợp lệ.")
     if msgs[-1]["role"] != "user":
         bad("Tin nhắn cuối phải là của người dùng.")
@@ -82,7 +97,11 @@ def parse_chat(body) -> tuple[str, list[dict], date | None]:
         bad("Câu hỏi không được để trống.")
     if len(question) > MAX_Q:
         bad("Câu hỏi quá dài (tối đa 1000 ký tự).")
-    history = [{"role": m["role"], "content": t} for m in msgs[:-1] if (t := nfc(_text(m)).strip())]
+    history = [
+        {"role": m["role"], "content": t}
+        for m in msgs[:-1]
+        if (t := nfc(_text(m)).strip())
+    ]
     as_of = body.get("as_of")
     if as_of is not None:
         try:
@@ -99,28 +118,46 @@ def _source_parts(docs: list[SourceDoc]) -> list[tuple[str, str, str]]:
     for s in docs:
         appendix = is_appendix_id(s.id)
         label = "Phụ lục" if appendix else "Điều"
-        title = f"{s.doc_number or s.doc_code}, {label} {s.article}" + (f". {s.title}" if s.title else "")
-        out.append((s.sid, f"/van-ban/{s.doc_code}#{'PL' if appendix else 'D'}{s.article}", title))
+        title = f"{s.doc_number or s.doc_code}, {label} {s.article}" + (
+            f". {s.title}" if s.title else ""
+        )
+        out.append(
+            (
+                s.sid,
+                f"/van-ban/{s.doc_code}#{'PL' if appendix else 'D'}{s.article}",
+                title,
+            )
+        )
     return out
 
 
 async def _canned(conn: AsyncConnection, question: str, llm: str) -> Plan | None:
     """`canned_answers.sources`: mảng {url, title}; sid gán S1..Sn theo thứ tự."""
     cur = await conn.execute(
-        "select answer, sources from canned_answers where question_norm = %s", (question_key(question),)
+        "select answer, sources from canned_answers where question_norm = %s",
+        (question_key(question),),
     )
     row = await cur.fetchone()
     if not row or not row[0]:
         return None
     items = [
-        s for s in (row[1] or []) if isinstance(s, dict) and isinstance(s.get("url"), str) and isinstance(s.get("title"), str)
+        s
+        for s in (row[1] or [])
+        if isinstance(s, dict)
+        and isinstance(s.get("url"), str)
+        and isinstance(s.get("title"), str)
     ]
     sources = [(f"S{i}", s["url"], s["title"]) for i, s in enumerate(items, 1)]
     return Plan("offline", llm, sources, f"{CANNED_LABEL}\n\n{row[0]}")
 
 
 async def build_plan(
-    request: Request, gw: Gateway, question: str, history: list[dict], as_of_req: date | None, trace: Trace
+    request: Request,
+    gw: Gateway,
+    question: str,
+    history: list[dict],
+    as_of_req: date | None,
+    trace: Trace,
 ) -> Plan:
     online = await llm_online(gw)
     llm = "online" if online else "offline"
@@ -130,32 +167,65 @@ async def build_plan(
         with trace.span("condense"):
             try:
                 async with asyncio.timeout(CONDENSE_TIMEOUT_S):
-                    condensed = nfc(await gw.chat_once(condense_messages(history, question))).strip()
+                    condensed = nfc(
+                        await gw.chat_once(condense_messages(history, question))
+                    ).strip()
                 search_q = condensed[:MAX_Q] or question
             except Exception as e:  # condense hỏng thì dùng câu hỏi gốc
                 log.warning("condense failed, using raw question: %r", e)
-    conn = PooledReader(request)  # mượn pool từng câu lệnh: không giữ kết nối khi chờ embed / rerank
+    conn = PooledReader(
+        request
+    )  # mượn pool từng câu lệnh: không giữ kết nối khi chờ embed / rerank
     iv = await active_index_version(conn)  # type: ignore[arg-type]
-    meta = {"index_version": iv, "as_of": as_of.isoformat(), "prompt_version": PROMPT_VERSION}
+    meta = {
+        "index_version": iv,
+        "as_of": as_of.isoformat(),
+        "prompt_version": PROMPT_VERSION,
+    }
     if not online and (canned := await _canned(conn, question, llm)):  # type: ignore[arg-type]
         canned.meta = {**meta, "mode": "offline", "canned": True}
         return canned
     tau = await refusal_tau(conn)  # type: ignore[arg-type]
     cands = await retrieve(
-        search_q[:MAX_QUERY_CHARS], as_of, gw, conn, iv, online, trace=trace, pin_text=question[:MAX_QUERY_CHARS]  # type: ignore[arg-type]
+        search_q[:MAX_QUERY_CHARS],
+        as_of,
+        gw,
+        conn,  # type: ignore[arg-type]
+        iv,
+        online,
+        trace=trace,
+        pin_text=question[:MAX_QUERY_CHARS],
     )
     docs: list[SourceDoc] = []
     if cands and not should_refuse(cands, tau):
         with trace.span("expand"):
-            docs = await expand([c.parent_id for c in cands], conn, iv, as_of, max_extra=4 if online else 0)  # type: ignore[arg-type]
+            docs = await expand(
+                [c.parent_id for c in cands],
+                conn,  # type: ignore[arg-type]
+                iv,
+                as_of,
+                max_extra=4 if online else 0,
+            )
     if not docs:
         return Plan("refused", llm, text=REFUSAL_TEXT, meta={**meta, "mode": "refused"})
     sources = _source_parts(docs)
     if not online:
         listing = "\n".join(f"- [{sid}] {title}" for sid, _, title in sources)
-        return Plan("offline", llm, sources, f"{OFFLINE_TEXT}\n\n{listing}", docs=docs, meta={**meta, "mode": "offline"})
+        return Plan(
+            "offline",
+            llm,
+            sources,
+            f"{OFFLINE_TEXT}\n\n{listing}",
+            docs=docs,
+            meta={**meta, "mode": "offline"},
+        )
     return Plan(
-        "rag", llm, sources, messages=build_messages(question, docs, history, as_of), docs=docs, meta={**meta, "mode": "rag"}
+        "rag",
+        llm,
+        sources,
+        messages=build_messages(question, docs, history, as_of),
+        docs=docs,
+        meta={**meta, "mode": "rag"},
     )
 
 
@@ -165,7 +235,12 @@ async def flush_trace(trace: Trace) -> None:
         await anyio.to_thread.run_sync(trace.flush)
 
 
-async def close_trace(trace: Trace, output: str | None = None, meta: dict | None = None, flush: bool = True) -> None:
+async def close_trace(
+    trace: Trace,
+    output: str | None = None,
+    meta: dict | None = None,
+    flush: bool = True,
+) -> None:
     """Kết thúc trace. `flush=True` (đường hủy/lỗi, response không còn chạy được background): flush shield nhưng tối đa ABORT_FLUSH_S."""
     trace.finish(output, meta)
     if flush and trace.enabled:
@@ -187,7 +262,11 @@ async def _disconnected(request: Request | None) -> bool:
 
 
 async def event_stream(
-    plan: Plan, gw: Gateway, trace: Trace, request: Request | None = None, deadline: float | None = None
+    plan: Plan,
+    gw: Gateway,
+    trace: Trace,
+    request: Request | None = None,
+    deadline: float | None = None,
 ) -> AsyncIterator[bytes]:
     """`deadline`: thời điểm `time.monotonic()` phải xong (None = không giới hạn). Ngắt kết nối: dừng, đóng upstream, không phát gì thêm."""
     answer: list[str] = []
@@ -207,7 +286,9 @@ async def event_stream(
                 n = 0
                 with trace.span("llm"):
                     while True:
-                        if n % DISCONNECT_POLL_EVERY == 0 and await _disconnected(request):
+                        if n % DISCONNECT_POLL_EVERY == 0 and await _disconnected(
+                            request
+                        ):
                             meta["disconnected"] = True
                             return
                         left = None if deadline is None else deadline - time.monotonic()
@@ -232,7 +313,9 @@ async def event_stream(
             if plan.mode == "rag":
                 rep = check_citations("".join(answer), plan.docs)
                 if rep.invalid or rep.article_mismatch:
-                    yield stream.sse(stream.data_citation_warning(rep.invalid, rep.article_mismatch))
+                    yield stream.sse(
+                        stream.data_citation_warning(rep.invalid, rep.article_mismatch)
+                    )
             yield stream.sse(stream.data_trace(trace.trace_id))
             yield stream.sse(stream.finish())
         except _Overtime:
@@ -258,7 +341,9 @@ async def event_stream(
 async def chat(request: Request, settings: Settings = Depends(get_settings)):
     deadline = time.monotonic() + CHAT_BUDGET_S
     question, history, as_of = parse_chat(await read_json(request))
-    if not await ratelimit.check(ratelimit.client_ip(request), settings=settings, client=request.app.state.http):
+    if not await ratelimit.check(
+        ratelimit.client_ip(request), settings=settings, client=request.app.state.http
+    ):
         raise HTTPException(429, RATE_LIMITED)
     gw: Gateway = request.app.state.gw
     trace = Trace(question, settings)

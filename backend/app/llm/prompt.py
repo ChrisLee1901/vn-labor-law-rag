@@ -1,4 +1,5 @@
 """Dựng messages cho LLM: system prompt tĩnh + nguồn/ngày áp dụng/câu hỏi trong tin nhắn user."""
+
 from datetime import date
 from pathlib import Path
 
@@ -30,7 +31,9 @@ def _clip(text: str, n: int) -> str:
 
 def format_source(s: SourceDoc, content: str | None = None) -> str:
     label = f"Phụ lục {s.article}" if is_appendix_id(s.id) else f"Điều {s.article}"
-    window = f"hiệu lực {_d(s.effective_from)}" + (f" đến {_d(s.effective_to)}" if s.effective_to else "")
+    window = f"hiệu lực {_d(s.effective_from)}" + (
+        f" đến {_d(s.effective_to)}" if s.effective_to else ""
+    )
     body = s.content if content is None else content
     return f"[{s.sid}] {_safe(s.doc_number)}, {label}. {_safe(s.title)} — {window}\n{_safe(body)}"
 
@@ -38,13 +41,21 @@ def format_source(s: SourceDoc, content: str | None = None) -> str:
 def _history(history: list[dict]) -> list[dict]:
     out = []
     for m in history[-MAX_HISTORY:]:
-        text = strip_citations(m["content"]) if m["role"] == "assistant" else m["content"]
-        out.append({"role": m["role"], "content": _safe(_clip(text, MAX_HISTORY_CHARS))})
+        text = (
+            strip_citations(m["content"]) if m["role"] == "assistant" else m["content"]
+        )
+        out.append(
+            {"role": m["role"], "content": _safe(_clip(text, MAX_HISTORY_CHARS))}
+        )
     return out
 
 
 def build_messages(
-    question: str, sources: list[SourceDoc], history: list[dict], as_of: date, max_context_chars: int = 15000
+    question: str,
+    sources: list[SourceDoc],
+    history: list[dict],
+    as_of: date,
+    max_context_chars: int = 15000,
 ) -> list[dict]:
     """Ngân sách ký tự (~2.5-3 ký tự/token) cho system + lịch sử + nguồn + câu hỏi.
 
@@ -64,16 +75,23 @@ def build_messages(
         blocks.append(block)
         used += len(block)
     user = (
-        f"Ngày áp dụng: {_d(as_of)}\n\n<nguon>\n" + "\n\n".join(blocks) + "\n</nguon>\n\n"
+        f"Ngày áp dụng: {_d(as_of)}\n\n<nguon>\n"
+        + "\n\n".join(blocks)
+        + "\n</nguon>\n\n"
         f"Câu hỏi: {question}"
     )
-    return [{"role": "system", "content": _SYSTEM}, *history, {"role": "user", "content": user}]
+    return [
+        {"role": "system", "content": _SYSTEM},
+        *history,
+        {"role": "user", "content": user},
+    ]
 
 
 def condense_messages(history: list[dict], question: str) -> list[dict]:
     """Viết lại câu hỏi nối tiếp thành câu độc lập; chỉ gọi từ lượt thứ 2."""
     turns = "\n".join(
-        f"{'Người dùng' if m['role'] == 'user' else 'Trợ lý'}: {m['content']}" for m in _history(history)
+        f"{'Người dùng' if m['role'] == 'user' else 'Trợ lý'}: {m['content']}"
+        for m in _history(history)
     )
     user = f"Hội thoại trước:\n{turns}\n\nCâu hỏi nối tiếp: {_safe(question)}\n\nCâu hỏi độc lập:"
     return [{"role": "system", "content": _CONDENSE}, {"role": "user", "content": user}]
