@@ -13,6 +13,7 @@ Chạy: python -m rag_pipelines.eval.retrieval_eval --index eval/index/v1.parque
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -22,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import psycopg
 from app.legal.normalize import strip_diacritics
-from app.llm.gateway import Gateway
+from app.llm.gateway import Gateway, LLMOffline
 from app.retrieval.search import CANDIDATES, _by_rrf, _hybrid, retrieve
 from app.retrieval.tsquery import build_tsquery
 from psycopg import AsyncConnection
@@ -59,10 +60,15 @@ def compute_metrics(run: dict[str, list[str]], gold: dict[str, list[str]]) -> di
 
 
 def gate(current: dict, baseline: dict, max_drop: float) -> int:
-    bad = [f"hybrid {m}: {baseline['hybrid'][m]:.4f} -> {current['hybrid'][m]:.4f}"
-           for m in GATED if "hybrid" in current and "hybrid" in baseline and baseline["hybrid"][m] - current["hybrid"][m] > max_drop + 1e-9]
+    """0 = đạt. Fail khi không so sánh được (thiếu hybrid, khác split/n_queries) hoặc recall@10 / mrr@10 của hybrid giảm quá ngưỡng."""
+    bad = [f"cannot compare: `{k}` is {baseline.get(k)!r} in baseline vs {current.get(k)!r} now (regenerate the baseline)"
+           for k in ("split", "n_queries") if baseline.get(k) != current.get(k)]
+    bad += [f"cannot compare: mode `hybrid` missing in {name}" for name, r in (("current run", current), ("baseline", baseline)) if "hybrid" not in r]
+    if not bad:
+        bad = [f"hybrid {m}: {baseline['hybrid'][m]:.4f} -> {current['hybrid'][m]:.4f} (max drop {max_drop})"
+               for m in GATED if baseline["hybrid"][m] - current["hybrid"][m] > max_drop + 1e-9]
     for b in bad:
-        print(f"REGRESSION (max drop {max_drop}): {b}", file=sys.stderr)
+        print(f"REGRESSION: {b}", file=sys.stderr)
     return 1 if bad else 0
 
 
@@ -71,6 +77,8 @@ def markdown(res: dict) -> str:
     lines = [f"Index `{res['index']}`, split `{res['split']}`, n={res['n_queries']}", "",
              "| mode | " + " | ".join(METRICS) + " |", "|---|" + "---|" * len(METRICS)]
     lines += [f"| {m} | " + " | ".join(f"{res[m][k]:.3f}" for k in METRICS) + " |" for m in modes]
+    if "hybrid_rerank" in modes:
+        lines += ["", "hybrid_rerank trả tối đa 6 Điều cha (đúng như API), nên recall@10/20 của dòng này xấp xỉ recall@6, không so trực tiếp với các mode khác."]
     return "\n".join(lines) + "\n"
 
 
@@ -80,21 +88,30 @@ def cache_base(model: str) -> Path:
     return ROOT / "eval/cache" / f"query_emb_{model.replace('/', '-')}"
 
 
-def write_cache(base: Path, ids: list[str], vecs: list[list[float]]) -> None:
+def _sha(q: str) -> str:
+    return hashlib.sha1(q.encode("utf-8")).hexdigest()
+
+
+def write_cache(base: Path, items: list[GoldItem], vecs: list[list[float]], model: str) -> None:
     base.parent.mkdir(parents=True, exist_ok=True)
     np.save(base.with_suffix(".npy"), np.asarray(vecs, dtype=np.float32))
-    base.with_suffix(".ids.json").write_text(json.dumps(ids, ensure_ascii=False), encoding="utf-8")
+    meta = {"model": model, "ids": [g.id for g in items], "sha1": [_sha(g.question) for g in items]}
+    base.with_suffix(".ids.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
 
 
-def load_cache(base: Path, ids: list[str]) -> dict[str, list[float]]:
+def load_cache(base: Path, items: list[GoldItem], model: str) -> dict[str, list[float]]:
+    """Mỗi câu phải có trong cache với đúng nội dung (sha1) và đúng model, nếu không -> báo refresh."""
     npy, idf = base.with_suffix(".npy"), base.with_suffix(".ids.json")
     if not (npy.exists() and idf.exists()):
         raise ValueError(f"không có cache embedding câu hỏi ({npy.name}): {MISS}")
-    row = {i: n for n, i in enumerate(json.loads(idf.read_text(encoding="utf-8")))}
-    if missing := [i for i in ids if i not in row]:
-        raise ValueError(f"cache thiếu embedding cho {missing[:5]}: {MISS}")
+    meta = json.loads(idf.read_text(encoding="utf-8"))
+    if not isinstance(meta, dict) or meta.get("model") != model:
+        raise ValueError(f"cache không khớp model {model}: {MISS}")
+    row = {i: n for n, i in enumerate(meta["ids"])}
+    if bad := [g.id for g in items if g.id not in row or meta["sha1"][row[g.id]] != _sha(g.question)]:
+        raise ValueError(f"cache thiếu hoặc lỗi thời cho {bad[:5]}: {MISS}")
     m = np.load(npy)
-    return {i: m[row[i]].tolist() for i in ids}
+    return {g.id: m[row[g.id]].tolist() for g in items}
 
 
 # ---- truy xuất ----
@@ -103,6 +120,18 @@ def run_async(coro):
     """psycopg async cần selector loop (Windows mặc định là Proactor)."""
     with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as r:
         return r.run(coro)
+
+
+class GatewayLost(RuntimeError):
+    """Gateway sập giữa lúc eval hybrid_rerank (`retrieve` sẽ lặng lẽ rơi về FTS nên phải dừng thay vì ghi số sai)."""
+
+
+class StrictGateway(Gateway):
+    async def _post(self, path: str, body: dict) -> dict:
+        try:
+            return await super()._post(path, body)
+        except LLMOffline as e:
+            raise GatewayLost(f"gateway offline during hybrid_rerank eval: {e}") from e
 
 
 async def _dense(conn, question: str, as_of: date, version: int, vec: list[float]) -> list[tuple[str, str, float]]:
@@ -144,7 +173,7 @@ def refresh_cache(golden: list[GoldItem], model: str) -> None:
         vecs = embed_all([g.question for g in golden], emb)  # batch 32 + retry
     finally:
         emb.close()
-    write_cache(cache_base(model), [g.id for g in golden], vecs)
+    write_cache(cache_base(model), golden, vecs, model)
     print(f"cache: {len(golden)} câu -> {cache_base(model).with_suffix('.npy')}", file=sys.stderr)
 
 
@@ -169,19 +198,31 @@ def main(argv: list[str] | None = None) -> int:
     if bad := [m for m in modes if m not in MODES]:
         ap.error(f"unknown modes {bad}")
 
+    baseline = None
+    if a.compare:  # kiểm tra trước khi chạy tốn thời gian
+        try:
+            baseline = json.loads(a.compare.read_text(encoding="utf-8"))
+            if not isinstance(baseline, dict):
+                raise ValueError("baseline must be a JSON object")
+        except (OSError, ValueError) as e:
+            print(f"error: --compare {a.compare}: {e}", file=sys.stderr)
+            return 2
     golden = load_golden(a.golden)
     if a.refresh_cache:
         refresh_cache(golden, a.embed_model)
     items = [g for g in golden if g.gold and a.split in ("all", g.split)]
+    if not items:
+        print(f"error: no golden items with gold in split '{a.split}'", file=sys.stderr)
+        return 2
     gw = None
     if "hybrid_rerank" in modes:
         base = os.environ.get("LLM_BASE_URL")
-        gw = Gateway(base, os.environ.get("LLM_API_KEY", "")) if base else None
+        gw = StrictGateway(base, os.environ.get("LLM_API_KEY", "")) if base else None
         if gw is None or not run_async(_ready(gw)):
             print("skip hybrid_rerank: LLM_BASE_URL chưa đặt hoặc gateway không sẵn sàng", file=sys.stderr)
             modes.remove("hybrid_rerank")
     try:
-        vecs = load_cache(cache_base(a.embed_model), [i.id for i in items]) if {"dense", "hybrid"} & set(modes) else {}
+        vecs = load_cache(cache_base(a.embed_model), items, a.embed_model) if {"dense", "hybrid"} & set(modes) else {}
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -190,7 +231,11 @@ def main(argv: list[str] | None = None) -> int:
         ensure_local(a.database_url)
     with psycopg.connect(a.database_url, autocommit=True) as conn:
         version = load_frozen(a.index, conn)
-    runs = run_async(run_modes(a.database_url, version, items, modes, vecs, gw))
+    try:
+        runs = run_async(run_modes(a.database_url, version, items, modes, vecs, gw))
+    except GatewayLost as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     gold = {i.id: i.gold for i in items}
     res = {m: compute_metrics(runs[m], gold) for m in modes}
     res |= {"n_queries": len(items), "split": a.split, "index": str(a.index)}
@@ -203,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.out:
         a.out.parent.mkdir(parents=True, exist_ok=True)
         a.out.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
-    return gate(res, json.loads(a.compare.read_text(encoding="utf-8")), a.max_drop) if a.compare else 0
+    return gate(res, baseline, a.max_drop) if baseline is not None else 0
 
 
 if __name__ == "__main__":
