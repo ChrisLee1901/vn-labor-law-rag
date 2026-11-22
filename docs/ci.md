@@ -21,12 +21,14 @@ Workflow: `.github/workflows/ci.yml` (chạy trên `pull_request` và `push` và
 | `web` | `frontend/**` | pnpm install, lint, typecheck, vitest, build |
 | `e2e` | `frontend/**`, sau `web` xanh | Playwright (chromium), upload `playwright-report` khi lỗi |
 | `api` | `backend/**`, `supabase/migrations/**`, `docs/api-contract.md`, `scripts/pyright_ratchet.py`, `ruff.toml` | `uv lock --check`, ruff, pyright ratchet, pytest + Postgres pgvector |
-| `pipelines` | `pipelines/**`, `backend/**`, `supabase/migrations/**`, `docs/corpus/legal_docs.yaml`, `eval/golden/**`, `scripts/eval_gate_precheck.py`, `ruff.toml` | như `api`, ruff lấy từ backend |
+| `pipelines` | `pipelines/**`, `backend/**`, `supabase/migrations/**`, `docs/corpus/legal_docs.yaml`, `eval/golden/**`, `scripts/eval_gate_precheck.py`, `scripts/migration_guard.py`, `ruff.toml` | như `api`, ruff lấy từ backend |
 | `kaggle` | `kaggle/**`, `ruff.toml` | ruff, pytest gateway với model giả (CPU) |
 | `db` | `supabase/**`, `pipelines/pyproject.toml`, `ruff.toml` | pytest `supabase/tests` trên Postgres pgvector |
 | `eval-retrieval` | `backend/app/retrieval/**`, `backend/app/legal/**`, `supabase/migrations/**`, `eval/**`, `pipelines/rag_pipelines/**`, lockfile, `scripts/eval_gate_precheck.py`, `ruff.toml`, `ci.yml`, `eval-retrieval.yml` | gate truy xuất (workflow tái sử dụng `eval-retrieval.yml`), xem dưới |
 | `secrets` | luôn | gitleaks quét toàn bộ lịch sử |
 | `ci-ok` | luôn | tổng hợp |
+| `deploy-preview` | PR cùng repo (không fork, không Dependabot), sau `ci-ok` xanh | workflow tái sử dụng `deploy.yml`: Vercel preview, comment URL, Playwright offline + docs. Không nằm trong `needs` của `ci-ok` |
+| `deploy-prod` | `push` vào `main`, sau `ci-ok` xanh | `deploy.yml`: `migrate` (Environment `production`, guard migration) rồi `deploy` (Vercel `--prod`, smoke `/api/health`). Không nằm trong `needs` của `ci-ok` |
 
 Sửa `.github/workflows/ci.yml` thì mọi filter đều khớp.
 
@@ -51,6 +53,10 @@ Chống xóa lách gate: trên PR, precheck so với nhánh base (workflow `git 
 Giới hạn còn lại: PR vẫn có thể sửa con số bên trong `eval/baselines/main.json` (thấy trong diff) để nới ngưỡng. **[USER]** Bắt buộc review cho `eval/baselines/**` (CODEOWNERS hoặc ruleset yêu cầu review file đó; chưa thêm CODEOWNERS vì chưa biết username GitHub chủ repo).
 
 Cách gỡ bootstrap: commit `eval/baselines/main.json` (cùng `eval/index/` và `eval/cache/`) sau live batch (Task 3.1/3.4). Từ lúc đó quy tắc tự nghiêm ngặt, không cần sửa code. Index lớn hơn 50 MB thì dùng Git LFS (checkout đã bật `lfs: true`).
+
+## Deploy
+
+Hai job `deploy-*` chạy sau `ci-ok` và gọi `.github/workflows/deploy.yml` (không có trigger riêng, giống `eval-retrieval.yml`). Secrets, checklist `[USER]`, WAF, rollback và phương án dự phòng: [deploy.md](deploy.md). Chưa chạy trên GitHub lần nào.
 
 ## Ghi chú
 

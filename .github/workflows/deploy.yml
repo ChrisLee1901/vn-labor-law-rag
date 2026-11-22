@@ -1,0 +1,187 @@
+name: deploy
+
+# Reusable: ci.yml gọi sau khi `ci-ok` xanh (job `deploy-preview` trên PR cùng repo, job `deploy-prod` khi push vào main).
+# Không có trigger riêng để không deploy trước khi CI xong. Secrets truyền bằng `secrets: inherit` ở bên gọi.
+# CHƯA XÁC MINH (spike Task 0.4): `vercel build/deploy --prebuilt` với Vercel Services. Phương án dự phòng: docs/deploy.md.
+# Token chỉ đặt ở env của đúng step cần (không đặt cấp job/workflow) để action bên thứ ba không đọc được.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "preview hoặc production"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # có pipefail cho `cmd | tee`
+
+jobs:
+  # Chưa cấu hình secret Vercel (repo mới) thì preview bỏ qua có thông báo thay vì làm đỏ PR.
+  gate:
+    if: inputs.environment == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      ready: ${{ steps.c.outputs.ready }}
+    steps:
+      - id: c
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Bỏ qua preview: thiếu VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID (docs/deploy.md)."
+          fi
+
+  preview:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # Playwright: offline.spec tối đa ~5 phút mỗi lần x 2 project x (1 + 1 retry)
+    permissions:
+      contents: read
+      pull-requests: write # sticky comment
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+          cache: true
+          cache_dependency_path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - run: npm install --global vercel@66.6.0
+
+      - id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=preview
+          # API_ORIGIN hoặc NEXT_PUBLIC_SITE_URL phải có (trang /van-ban gọi API từ server). grep -q không in giá trị.
+          grep -Eq '^(API_ORIGIN|NEXT_PUBLIC_SITE_URL)=.*[^"[:space:]].*$' .vercel/.env.preview.local || {
+            echo "::error::Vercel (Preview) thiếu API_ORIGIN hoặc NEXT_PUBLIC_SITE_URL, xem docs/deploy.md."
+            exit 1
+          }
+          vercel build
+          url=$(vercel deploy --prebuilt)
+          [[ "$url" =~ ^https://[A-Za-z0-9.-]+$ ]] || { echo "::error::Không đọc được URL preview từ vercel deploy."; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Ghi URL (summary và comment)
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '**Preview:** %s\n\nCommit `%s`\n' "$URL" "${SHA:0:7}" | tee preview-comment.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: marocchino/sticky-pull-request-comment@v3
+        continue-on-error: true # chỉ step này; URL vẫn nằm trong job summary
+        with:
+          header: preview-url
+          path: preview-comment.md
+
+      # Chỉ spec chạy được trên bản deploy thật (backend + DB thật). online-mock và layout cần stub cục bộ nên không chạy ở đây.
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Playwright trên preview
+        working-directory: frontend
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: pnpm exec playwright test e2e/offline.spec.ts e2e/docs.spec.ts
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report-preview
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+
+  # Environment `production` (có thể bắt reviewer) đặt ở đây; deploy cần migrate nên cũng bị chặn theo. Secret để cấp repo.
+  migrate:
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.2.0
+      - name: Link, dry-run, guard, push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase db push --dry-run 2>&1 | tee dry-run.txt
+          { echo '### supabase db push --dry-run'; echo '```'; cat dry-run.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # Luật 5 CLAUDE.md: chỉ additive. Cố ý thì thêm `-- allow-destructive: <lý do>` vào file migration (hiện trong diff PR).
+          python3 scripts/migration_guard.py dry-run.txt
+          supabase db push
+
+  deploy:
+    needs: migrate
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+          cache: true
+          cache_dependency_path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - run: npm install --global vercel@66.6.0
+
+      - id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=production
+          grep -Eq '^(API_ORIGIN|NEXT_PUBLIC_SITE_URL)=.*[^"[:space:]].*$' .vercel/.env.production.local || {
+            echo "::error::Vercel (Production) thiếu API_ORIGIN hoặc NEXT_PUBLIC_SITE_URL, xem docs/deploy.md."
+            exit 1
+          }
+          vercel build --prod
+          url=$(vercel deploy --prebuilt --prod)
+          [[ "$url" =~ ^https://[A-Za-z0-9.-]+$ ]] || { echo "::error::Không đọc được URL từ vercel deploy."; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "**Production:** $url" >> "$GITHUB_STEP_SUMMARY"
+
+      # Smoke: chỉ đòi db "ok"; llm thường offline (Kaggle tắt) nên không đòi online. URL deployment bị Deployment Protection
+      # chặn (401) nếu không có bypass secret, khi đó smoke đỏ và docs/deploy.md hướng dẫn đặt secret.
+      - name: Smoke /api/health (db ok)
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          hdr=()
+          [ -z "$BYPASS" ] || hdr=(-H "x-vercel-protection-bypass: $BYPASS")
+          for i in $(seq 1 24); do
+            body=$(curl -sS --max-time 10 "${hdr[@]}" "$URL/api/health" || true)
+            if jq -e '.db == "ok"' <<<"$body" >/dev/null 2>&1; then echo "health ok: $body"; exit 0; fi
+            echo "lần $i: ${body:-không có phản hồi}"
+            sleep 5
+          done
+          echo "::error::/api/health không báo db ok sau ~2 phút."
+          exit 1

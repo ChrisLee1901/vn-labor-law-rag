@@ -4,6 +4,10 @@ const APP_PORT = 3100;
 const STUB_PORT = 8787;
 const STUB_ORIGIN = `http://127.0.0.1:${STUB_PORT}`;
 const baseURL = process.env.BASE_URL ?? `http://127.0.0.1:${APP_PORT}`;
+// Preview bị Vercel Deployment Protection chặn request tự động; secret này (nếu đặt) cho qua. Chỉ gửi khi chạy trên BASE_URL.
+const bypass = process.env.BASE_URL
+  ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+  : undefined;
 
 // BASE_URL đặt = chạy trên preview thật (không dựng gì cục bộ). Không đặt = dựng stub API + app production cục bộ.
 export default defineConfig({
@@ -11,7 +15,13 @@ export default defineConfig({
   workers: 1, // stub-api giữ một cổng "release" dùng chung, nên các test chạy lần lượt
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
-  use: { baseURL, trace: "retain-on-failure" },
+  use: {
+    baseURL,
+    trace: "retain-on-failure",
+    ...(bypass
+      ? { extraHTTPHeaders: { "x-vercel-protection-bypass": bypass } }
+      : {}),
+  },
   projects: [
     { name: "desktop", use: { viewport: { width: 1280, height: 800 } } },
     { name: "mobile", use: { viewport: { width: 390, height: 844 } } },

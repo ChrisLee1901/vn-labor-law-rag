@@ -49,6 +49,7 @@ jobs:
               - 'docs/corpus/legal_docs.yaml'
               - 'eval/golden/**'
               - 'scripts/eval_gate_precheck.py'
+              - 'scripts/migration_guard.py'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             kaggle:
@@ -273,3 +274,34 @@ jobs:
           echo "Có job lỗi hoặc bị hủy:"
           echo "$NEEDS"
           exit 1
+
+  # CD: chạy SAU ci-ok, không nằm trong needs của ci-ok (không được chặn ci-ok). Chi tiết: docs/deploy.md.
+  # Fork và Dependabot không có secret nên bỏ qua (skipped), không làm đỏ.
+  deploy-preview:
+    needs: ci-ok
+    if: >-
+      needs.ci-ok.result == 'success' && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]'
+    # workflow tái sử dụng: quyền của job gọi phải bao quyền job con cần (comment lên PR).
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: preview
+    secrets: inherit
+
+  # Trong deploy.yml: migrate (Environment production) rồi deploy; deploy chỉ chạy khi migrate xanh.
+  deploy-prod:
+    needs: ci-ok
+    if: needs.ci-ok.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+    secrets: inherit

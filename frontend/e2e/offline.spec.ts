@@ -5,7 +5,7 @@ import { ask, QUESTION, REMOTE, sourcesPanel } from "./helpers";
 test.skip(!REMOTE, "Cần BASE_URL của bản preview (backend + DB thật); không chạy được cục bộ.");
 
 test("hỏi lương tối thiểu vùng I: có badge trạng thái và nguồn 293/2025/NĐ-CP", async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(300_000); // chờ nối tiếp tối đa 30 + 120 + 120 s, cộng dư
   await ask(page, QUESTION);
 
   // Mô hình có thể bật hoặc tắt; chấp nhận cả hai.
