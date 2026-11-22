@@ -14,6 +14,10 @@ from app.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 IP_LIMIT, IP_WINDOW = 20, 600
+FEEDBACK_LIMIT, FEEDBACK_WINDOW = (
+    30,
+    3600,
+)  # /api/feedback: bucket riêng (tiền tố `fb:`), không đếm vào trần toàn cục
 GLOBAL_LIMIT, DAY = 300, 86400
 TIMEOUT = 1.0  # total deadline for both Upstash calls
 _warned_missing = False
@@ -33,7 +37,7 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
-def _ip_key(ip: str, window: int) -> str:
+def _ip_key(ip: str, window: int, prefix: str = "ip") -> str:
     try:
         addr = ipaddress.ip_address(ip.strip())
         if isinstance(addr, ipaddress.IPv6Address):
@@ -45,7 +49,7 @@ def _ip_key(ip: str, window: int) -> str:
             norm = str(addr)
     except ValueError:
         norm = "unknown"  # shared bucket
-    return f"ip:{hashlib.sha256(norm.encode()).hexdigest()[:16]}:{window}"  # hashed: no raw IPs in Redis
+    return f"{prefix}:{hashlib.sha256(norm.encode()).hexdigest()[:16]}:{window}"  # hashed: no raw IPs in Redis
 
 
 async def check(
@@ -54,8 +58,11 @@ async def check(
     settings: Settings | None = None,
     client: httpx.AsyncClient | None = None,
     now: float | None = None,
+    scope: str = "chat",
 ) -> bool:
-    """True = request allowed. Fails open on any Upstash problem."""
+    """True = request allowed. Fails open on any Upstash problem.
+
+    `scope="feedback"`: chỉ đếm theo IP trong bucket riêng (FEEDBACK_LIMIT / FEEDBACK_WINDOW), không đụng bucket chat và trần toàn cục."""
     global _warned_missing
     s = settings or get_settings()
     if not (s.UPSTASH_REDIS_REST_URL and s.UPSTASH_REDIS_REST_TOKEN):
@@ -64,7 +71,10 @@ async def check(
             logger.warning("rate limit disabled: Upstash settings missing")
         return True
     now = time.time() if now is None else now
-    ip_key, glob_key = _ip_key(ip, int(now // IP_WINDOW)), f"glob:{int(now // DAY)}"
+    fb = scope == "feedback"
+    limit, window = (FEEDBACK_LIMIT, FEEDBACK_WINDOW) if fb else (IP_LIMIT, IP_WINDOW)
+    ip_key = _ip_key(ip, int(now // window), "fb" if fb else "ip")
+    glob_key = f"glob:{int(now // DAY)}"
     url = s.UPSTASH_REDIS_REST_URL.rstrip("/") + "/pipeline"
     headers = {"Authorization": f"Bearer {s.UPSTASH_REDIS_REST_TOKEN}"}
 
@@ -83,9 +93,9 @@ async def check(
             c = client or httpx.AsyncClient(timeout=TIMEOUT)
             try:
                 # Sequential on purpose: a blocked IP must not burn the shared daily budget.
-                if await count(c, ip_key, IP_WINDOW) > IP_LIMIT:
+                if await count(c, ip_key, window) > limit:
                     return False
-                return await count(c, glob_key, DAY) <= GLOBAL_LIMIT
+                return fb or await count(c, glob_key, DAY) <= GLOBAL_LIMIT
             finally:
                 if client is None:
                     await c.aclose()

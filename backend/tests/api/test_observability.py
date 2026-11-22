@@ -4,9 +4,10 @@ import re
 import time
 
 import pytest
-from app import tracing
+from app import ratelimit, tracing
 from app.api.chat import flush_trace
 from app.legal.normalize import question_key
+from app.pii import redact_pii
 from apimock import QUESTION, Gateway, parse_sse
 from lfsink import LangfuseSink
 from test_chat import ask, turn
@@ -168,3 +169,107 @@ async def test_flush_trace_is_bounded(monkeypatch):
     t0 = time.monotonic()
     await flush_trace(Hang())  # type: ignore[arg-type]
     assert time.monotonic() - t0 < 1.0
+
+
+# ---- review fix I2: PII có dấu phân cách, email; condensed + output LLM
+FORMATS = [
+    "0912 345 678",
+    "0912.345.678",
+    "091-234-5678",
+    "+84 912 345 678",
+    "+84-912-345-678",
+    "0912345678",
+    "+84912345678",
+    "001 203 004 567",
+    "079-123-456",
+    "a.b+c@example.com",
+]
+LEGAL_TEXT = [
+    "5.310.000 đồng",
+    "12.000.000.000 đồng",
+    "1 000 000 000 đồng",
+    "310.000.000 đồng",
+    "310 000 000 đồng",
+    "293/2025/NĐ-CP",
+    "145/2020/NĐ-CP, Điều 33 khoản 1",
+    "01/01/2026",
+    "từ 01-01-2026 đến 31-12-2026",
+    "LBHXH-2024:D33:K1 và ND145-2020",
+    "lương 2.500.000 đồng/tháng năm 2026",
+]
+
+
+@pytest.mark.parametrize("pii", FORMATS)
+def test_redact_pii_separator_formats(pii):
+    out = redact_pii(f"liên hệ {pii} nhé")
+    assert out == "liên hệ [đã ẩn] nhé", out
+
+
+@pytest.mark.parametrize("text", LEGAL_TEXT)
+def test_redact_pii_keeps_legal_numbers_and_money(text):
+    assert redact_pii(f"Theo {text} thì") == f"Theo {text} thì"
+
+
+def test_pii_in_condensed_text_and_llm_output_never_reaches_langfuse(lf, client):
+    history = [turn("user", "Lương tối thiểu?"), turn("assistant", "Theo Điều 3.")]
+    condensed = f"{QUESTION} (gọi 0912 345 678, a.b+c@example.com)"
+    answer = "Liên hệ 091-234-5678 hoặc +84 912 345 678 [S1]."
+    with Gateway(condensed=condensed, answer=(answer,)):
+        parse_sse(ask(client, f"{QUESTION} CCCD 001 203 004 567", history=history).text)
+    wait_spans(lf, 7)
+    for frag in ("345 678", "234-5678", "004 567", "example.com", "a.b+c"):
+        assert frag not in lf.raw_text, frag
+    assert "[đã ẩn]" in lf.raw_text
+
+
+# ---- review fix I1: chỉ chuyển tiếp trace_id 32-hex; rate limit riêng cho feedback
+@pytest.mark.parametrize(
+    "tid", ["never-seen", "x" * 64, "a" * 31, "a" * 33, "A" * 32, "g" * 32]
+)
+def test_feedback_with_non_trace_id_is_stored_but_not_forwarded(
+    lf, client, seeded, tid
+):
+    assert (
+        client.post("/api/feedback", json={"trace_id": tid, "score": 1}).status_code
+        == 204
+    )
+    assert seeded.execute("select trace_id from feedback").fetchall() == [(tid,)]
+    time.sleep(
+        0.5
+    )  # nền đã chạy xong (TestClient đợi BackgroundTask); chắc chắn không có gì tới sink
+    assert lf.raw == [] and lf.scores == []
+
+
+def test_feedback_with_valid_trace_id_is_forwarded_without_chat(lf, client):
+    tid = "0123456789abcdef" * 2
+    assert (
+        client.post("/api/feedback", json={"trace_id": tid, "score": 1}).status_code
+        == 204
+    )
+    assert lf.wait_for(lambda: lf.scores)
+    assert lf.scores[0]["traceId"] == tid
+
+
+def test_feedback_rate_limited_429_own_scope_and_not_stored(
+    client, seeded, monkeypatch
+):
+    calls = []
+
+    async def deny(ip, **kw):
+        calls.append(kw)
+        return False
+
+    monkeypatch.setattr(ratelimit, "check", deny)
+    r = client.post("/api/feedback", json={"trace_id": "t", "score": 1})
+    assert r.status_code == 429 and r.json() == {
+        "detail": "Bạn gửi đánh giá hơi nhanh, vui lòng thử lại sau."
+    }
+    assert calls[0]["scope"] == "feedback"
+    assert seeded.execute("select count(*) from feedback").fetchone() == (0,)
+    # 422 vẫn đi trước rate limit (không tốn lượt cho input sai)
+    calls.clear()
+    assert (
+        client.post("/api/feedback", json={"trace_id": "", "score": 1}).status_code
+        == 422
+    )
+    assert calls == []

@@ -188,3 +188,38 @@ def test_client_ip_precedence():
     assert ratelimit.client_ip(_req({"x-forwarded-for": "3.3.3.3:5555"})) == "3.3.3.3"
     assert ratelimit.client_ip(_req({})) == "9.9.9.9"
     assert ratelimit.client_ip(_req({}, client=None)) == ""
+
+
+async def test_feedback_scope_has_own_bucket_and_never_touches_chat_or_global(up):
+    res = [
+        await ratelimit.check("1.2.3.4", settings=S, now=1000.0, scope="feedback")
+        for _ in range(ratelimit.FEEDBACK_LIMIT + 5)
+    ]
+    assert res.count(True) == ratelimit.FEEDBACK_LIMIT and res[-1] is False
+    assert not any(
+        k.startswith("glob:") for k in up.counts
+    )  # trần toàn cục của chat không bị chạm
+    assert all(k.startswith("fb:") for k in up.counts)
+    # bucket chat của cùng IP còn nguyên
+    assert all(
+        [await ratelimit.check("1.2.3.4", settings=S, now=1000.0) for _ in range(20)]
+    )
+    assert await ratelimit.check("1.2.3.4", settings=S, now=1000.0) is False
+    assert up.counts[f"glob:{1000 // 86400}"] == 20  # chỉ chat đếm vào global
+
+
+async def test_chat_traffic_does_not_consume_feedback_bucket(up):
+    for _ in range(21):
+        await ratelimit.check("1.2.3.4", settings=S, now=1000.0)
+    assert await ratelimit.check("1.2.3.4", settings=S, now=1000.0, scope="feedback")
+
+
+async def test_feedback_window_is_an_hour(up):
+    for _ in range(ratelimit.FEEDBACK_LIMIT + 1):
+        await ratelimit.check("1.2.3.4", settings=S, now=1000.0, scope="feedback")
+    assert not await ratelimit.check(
+        "1.2.3.4", settings=S, now=1000.0 + 600, scope="feedback"
+    )
+    assert await ratelimit.check(
+        "1.2.3.4", settings=S, now=1000.0 + 3600, scope="feedback"
+    )

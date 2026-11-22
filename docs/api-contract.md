@@ -208,7 +208,7 @@ Body: `{"trace_id":"3f2c9a1e","score":1,"comment":"Đúng, đủ ý"}`
 | `score` | `1` (hữu ích) hoặc `-1` (chưa tốt) |
 | `comment` | Tùy chọn |
 
-Trả 204, không có body. Điểm được lưu vào bảng `feedback`, rồi (sau khi response đã gửi) chuyển thành score Langfuse `user-feedback` (giá trị `1` hoặc `-1`, kiểu NUMERIC) gắn vào trace có `trace_id` đó; `comment` được che PII trước khi gửi. Langfuse chưa cấu hình, lỗi hay chậm (tối đa 5 s) thì feedback vẫn trả 204. Chi tiết span và cách kiểm tra: [runbook-observability.md](runbook-observability.md).
+Trả 204, không có body. Điểm được lưu vào bảng `feedback`, rồi (sau khi response đã gửi) chuyển thành score Langfuse `user-feedback` (giá trị `1` hoặc `-1`, kiểu NUMERIC) gắn vào trace có `trace_id` đó; `comment` được che PII trước khi gửi. Chỉ `trace_id` đúng 32 ký tự hex thường mới được chuyển tiếp; id khác vẫn được lưu local (204) nhưng không gửi Langfuse. Langfuse chưa cấu hình, lỗi hay chậm (tối đa 5 s) thì feedback vẫn trả 204. Chi tiết span và cách kiểm tra: [runbook-observability.md](runbook-observability.md).
 
 ## GET /api/cron/keepalive
 
@@ -219,7 +219,8 @@ Header bắt buộc: `Authorization: Bearer $CRON_SECRET`. Trả 204. Thiếu ho
 | Mã | Endpoint | Khi nào | `detail` |
 |---|---|---|---|
 | 422 | `/api/chat`, `/api/feedback` | Input sai | vd `Câu hỏi quá dài (tối đa 1000 ký tự).` |
-| 429 | `/api/chat` (chỉ endpoint này) | Vượt giới hạn tần suất | `Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.` |
+| 429 | `/api/chat` | Vượt giới hạn tần suất (20 lượt / 10 phút / IP, 300 lượt / ngày toàn cục) | `Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.` |
+| 429 | `/api/feedback` | Quá 30 lượt / giờ / IP (bucket riêng, không dùng chung với chat, không đếm vào trần toàn cục; 422 được kiểm trước nên input sai không tốn lượt) | `Bạn gửi đánh giá hơi nhanh, vui lòng thử lại sau.` |
 | 413 | `/api/chat`, `/api/feedback` (mọi POST) | Body lớn hơn 64 KB | `Yêu cầu quá lớn.` |
 | 503 | `/api/chat`, `/api/docs`, `/api/docs/{code}`, `/api/feedback`, `/api/cron/keepalive` | DB không khả dụng | `Cơ sở dữ liệu tạm thời không khả dụng, vui lòng thử lại sau.` |
 | 404 | `/api/docs/{code}` | Mã không tồn tại | `Không tìm thấy văn bản.` |

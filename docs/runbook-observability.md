@@ -29,11 +29,11 @@ Metadata nằm trên span gốc `chat` (ghi lúc kết thúc; mọi giá trị l
 
 Lệch so với brief ("metadata mức trace"): SDK Langfuse hiện cài (5.2.0) không còn `update_trace`; metadata mức trace chỉ có qua `propagate_attributes`, mà `index_version` và `mode` chỉ biết sau khi truy hồi. Nên metadata nằm ở observation gốc `chat` (khóa OTel `langfuse.observation.metadata.*`). Chưa kiểm trên UI thật xem nó có hiện ở khung metadata của trace không.
 
-PII: chỉ `input`/`output` của `chat` mang văn bản, đều qua `app.pii.redact_pii` (email, số điện thoại, CMND/CCCD). Span con không mang văn bản. Lịch sử hội thoại, văn bản câu hỏi đã gộp (condense) và nội dung điều luật không được gửi. Test dò toàn bộ byte Langfuse nhận được.
+PII: chỉ `input`/`output` của `chat` và `comment` của score mang văn bản, đều qua `app.pii.redact_pii` (email; số điện thoại và CMND/CCCD, kể cả khi viết `0912 345 678`, `091-234-5678`, `+84 912 345 678`, `001 203 004 567`). `redact_pii` chỉ dùng ở `app.tracing`: không đổi nội dung hiển thị cho người dùng, và bảng `feedback` vẫn lưu comment gốc. Dấu chấm không dùng để tách số CMND/CCCD (là dấu ngăn nghìn của tiền), và dạng tách nhóm không khớp khi đứng ngay sau `<số><dấu cách>`, nên không che nhầm 5.310.000, 12.000.000.000, 310 000 000 đồng, ngày hay số hiệu văn bản; đổi lại số điện thoại đứng ngay sau một con số + dấu cách (`2020 0912 345 678`) không được che. Span con không mang văn bản. Lịch sử hội thoại, văn bản câu hỏi đã gộp (condense) và nội dung điều luật không được gửi. Test dò toàn bộ byte Langfuse nhận được.
 
 ## Feedback thành score
 
-`POST /api/feedback` lưu vào bảng `feedback` như cũ, sau đó (BackgroundTask, sau khi trả 204) gọi `create_score(name="user-feedback", value=±1, data_type=NUMERIC, trace_id=<trace_id của client>, comment=<đã che PII>)` và flush. Một người bấm 👍 rồi 👎 tạo hai score (chưa có `score_id` cố định để ghi đè).
+`POST /api/feedback` lưu vào bảng `feedback` như cũ, sau đó (BackgroundTask, sau khi trả 204) gọi `create_score(name="user-feedback", value=±1, data_type=NUMERIC, trace_id=<trace_id của client>, comment=<đã che PII>)` và flush. Chỉ chuyển tiếp khi `trace_id` khớp `[0-9a-f]{32}` (id do backend sinh); id lạ vẫn lưu vào DB nhưng không tạo score mồ côi. `/api/feedback` có giới hạn riêng 30 lượt / giờ / IP (`ratelimit.FEEDBACK_LIMIT`, bucket Upstash tiền tố `fb:`, không chạm bucket chat và trần toàn cục), vượt thì 429. UI (`feedback.tsx`) xử lý 429 như mọi lỗi: một toast, nút bật lại, không vòng lặp. Một người bấm 👍 rồi 👎 tạo hai score (chưa có `score_id` cố định để ghi đè).
 
 ## Không bao giờ chặn người dùng
 
