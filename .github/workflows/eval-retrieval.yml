@@ -34,6 +34,11 @@ jobs:
             pipelines/uv.lock
             backend/uv.lock
 
+      # Precheck so sánh với nhánh base (chống PR xóa baseline/index để lách gate): cần ref base trong checkout nông.
+      - name: Fetch base ref
+        if: github.base_ref != ''
+        run: git fetch --depth=1 origin "refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
+
       # Bootstrap rule (docs/ci.md): thiếu baseline -> cảnh báo to, không xanh âm thầm; có baseline mà thiếu index/cache -> đỏ.
       - id: pre
         run: python3 scripts/eval_gate_precheck.py --comment eval-comment.md

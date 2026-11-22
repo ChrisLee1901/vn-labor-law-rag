@@ -46,6 +46,10 @@ Chưa có dữ liệu đóng băng thì gate không được xanh âm thầm:
 | baseline **có**, thiếu `eval/index/v1{,.legal_docs,.articles,.legal_refs}.parquet` hoặc `eval/cache/query_emb_AITeamVN-Vietnamese_Embedding.{npy,ids.json}` | job **đỏ**, comment nêu file thiếu |
 | đủ cả | chạy gate nghiêm ngặt |
 
+Chống xóa lách gate: trên PR, precheck so với nhánh base (workflow `git fetch` ref base, `GITHUB_BASE_REF` qua env). Nếu `eval/baselines/main.json` hoặc `eval/index/v1.parquet` có trên base mà PR xóa (hoặc baseline rỗng / không phải JSON object) thì job **đỏ**; chỉ khi base cũng chưa có baseline mới là "inactive". Push vào `main` bỏ qua kiểm tra base. Không canh `eval/cache/` (shortcut: chỉ baseline + index; nâng cấp nếu cần). Base ref không fetch được thì cũng đỏ (fail closed).
+
+Giới hạn còn lại: PR vẫn có thể sửa con số bên trong `eval/baselines/main.json` (thấy trong diff) để nới ngưỡng. **[USER]** Bắt buộc review cho `eval/baselines/**` (CODEOWNERS hoặc ruleset yêu cầu review file đó; chưa thêm CODEOWNERS vì chưa biết username GitHub chủ repo).
+
 Cách gỡ bootstrap: commit `eval/baselines/main.json` (cùng `eval/index/` và `eval/cache/`) sau live batch (Task 3.1/3.4). Từ lúc đó quy tắc tự nghiêm ngặt, không cần sửa code. Index lớn hơn 50 MB thì dùng Git LFS (checkout đã bật `lfs: true`).
 
 ## Ghi chú
