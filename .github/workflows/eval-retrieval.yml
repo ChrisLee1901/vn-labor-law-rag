@@ -1,0 +1,82 @@
+name: eval-retrieval
+
+# Reusable: được gọi từ ci.yml (job `eval-retrieval`, nằm trong needs của `ci-ok`). Không có trigger riêng
+# để khỏi chạy đôi và khỏi thoát khỏi `ci-ok`.
+on:
+  workflow_call:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # sticky comment; PR từ fork chỉ có token read-only nên step comment được phép lỗi
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # DB local trên runner; load_frozen từ chối host không phải localhost, không bao giờ chạm project Supabase thật.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true # index đóng băng có thể nằm trong Git LFS (plan Task 3.1)
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pipelines/uv.lock
+            backend/uv.lock
+
+      # Bootstrap rule (docs/ci.md): thiếu baseline -> cảnh báo to, không xanh âm thầm; có baseline mà thiếu index/cache -> đỏ.
+      - id: pre
+        run: python3 scripts/eval_gate_precheck.py --comment eval-comment.md
+
+      - name: Áp migrations vào Postgres local
+        if: steps.pre.outputs.active == 'true'
+        run: |
+          for f in supabase/migrations/*.sql; do
+            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      # Nạp index (load_frozen chạy bên trong retrieval_eval) rồi eval trên split test; exit code giữ lại tới cuối step
+      # để comment luôn được đăng kể cả khi gate đỏ.
+      - name: Eval truy xuất và gate
+        if: steps.pre.outputs.active == 'true'
+        run: |
+          set +e
+          uv run --project pipelines --locked python -m rag_pipelines.eval.retrieval_eval \
+            --index eval/index/v1.parquet --database-url "$TEST_DATABASE_URL" \
+            --modes fts,dense,hybrid --split test \
+            --compare eval/baselines/main.json --max-drop 0.03 \
+            --markdown eval-result.md 2> eval-stderr.log
+          code=$?
+          cat eval-stderr.log >&2
+          {
+            echo "### Retrieval eval gate"
+            echo
+            if [ "$code" -eq 0 ]; then echo "**PASS** (hybrid recall@10 và mrr@10 giảm không quá 0.03 so với \`eval/baselines/main.json\`)"
+            else echo "**FAIL** (exit $code)"; fi
+            echo
+            [ -f eval-result.md ] && cat eval-result.md
+            if [ "$code" -ne 0 ]; then echo; echo '```'; tail -n 20 eval-stderr.log; echo '```'; fi
+          } > eval-comment.md
+          exit "$code"
+
+      - name: Job summary
+        if: always()
+        run: '[ -f eval-comment.md ] && cat eval-comment.md >> "$GITHUB_STEP_SUMMARY" || true'
+
+      - name: PR comment
+        if: always() && github.event_name == 'pull_request' && hashFiles('eval-comment.md') != ''
+        continue-on-error: true # chỉ step này: PR từ fork không có quyền ghi; nội dung vẫn nằm trong job summary
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: eval-retrieval
+          path: eval-comment.md

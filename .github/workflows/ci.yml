@@ -25,7 +25,7 @@ jobs:
       pipelines: ${{ steps.f.outputs.pipelines }}
       kaggle: ${{ steps.f.outputs.kaggle }}
       db: ${{ steps.f.outputs.db }}
-      eval: ${{ steps.f.outputs.eval }} # dùng cho eval-retrieval (Task 6.2)
+      eval: ${{ steps.f.outputs.eval }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -48,6 +48,7 @@ jobs:
               - 'supabase/migrations/**'
               - 'docs/corpus/legal_docs.yaml'
               - 'eval/golden/**'
+              - 'scripts/eval_gate_precheck.py'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             kaggle:
@@ -60,12 +61,17 @@ jobs:
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             eval:
-              - 'pipelines/**'
-              - 'backend/app/**'
-              - 'eval/**'
-              - 'docs/corpus/**'
+              - 'backend/app/retrieval/**'
+              - 'backend/app/legal/**'
               - 'supabase/migrations/**'
+              - 'eval/**'
+              - 'pipelines/rag_pipelines/**'
+              - 'pipelines/uv.lock'
+              - 'backend/uv.lock'
+              - 'scripts/eval_gate_precheck.py'
+              - 'ruff.toml'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/eval-retrieval.yml'
 
   web:
     needs: changes
@@ -231,6 +237,15 @@ jobs:
       - run: uv run --project backend --locked ruff format --check supabase
       - run: uv run --project pipelines --locked pytest supabase/tests -v
 
+  eval-retrieval:
+    needs: changes
+    if: needs.changes.outputs.eval == 'true'
+    # workflow tái sử dụng: quyền của job gọi phải bao quyền job con cần (comment lên PR).
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/eval-retrieval.yml
+
   secrets:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -247,7 +262,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [changes, web, e2e, api, pipelines, kaggle, db, secrets]
+    needs: [changes, web, e2e, api, pipelines, kaggle, db, eval-retrieval, secrets]
     runs-on: ubuntu-latest
     steps:
       # skipped (filter không khớp) thì cho qua; chỉ failure hoặc cancelled làm đỏ.

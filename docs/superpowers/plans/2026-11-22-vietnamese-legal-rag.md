@@ -578,11 +578,12 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** `.github/workflows/eval-retrieval.yml`.
 
-- [ ] Trigger PR với paths `backend/app/retrieval/**`, `backend/app/legal/**`, `supabase/migrations/**`, `eval/**`, `pipelines/rag_pipelines/**`.
-- [ ] Các bước: `supabase db start` → nạp `eval/index/v1*.parquet` (script `python -m rag_pipelines.eval.load_frozen`) → `retrieval_eval --modes fts,dense,hybrid --split test --compare eval/baselines/main.json --max-drop 0.03` → render markdown → `marocchino/sticky-pull-request-comment`.
-- [ ] Thêm job này vào `needs` của `ci-ok` (dùng chung path filter).
-- [ ] Kiểm tra: PR cố tình bỏ stopword list → comment hiện chênh lệch, gate đỏ nếu tụt > 3 điểm. Giữ PR này làm **bằng chứng "gate chặn regression"** cho README, rồi đóng PR.
-- [ ] Commit `ci: retrieval eval gate with PR comment`.
+- [x] Trigger PR với paths `backend/app/retrieval/**`, `backend/app/legal/**`, `supabase/migrations/**`, `eval/**`, `pipelines/rag_pipelines/**`.
+- [x] Các bước: `supabase db start` → nạp `eval/index/v1*.parquet` (script `python -m rag_pipelines.eval.load_frozen`) → `retrieval_eval --modes fts,dense,hybrid --split test --compare eval/baselines/main.json --max-drop 0.03` → render markdown → `marocchino/sticky-pull-request-comment`.
+- [x] Thêm job này vào `needs` của `ci-ok` (dùng chung path filter).
+- [x] Triển khai (xem `docs/ci.md`): `eval-retrieval.yml` là workflow tái sử dụng, gọi từ `ci.yml` và nằm trong `needs` của `ci-ok`; bootstrap rule `scripts/eval_gate_precheck.py` (thiếu baseline thì cảnh báo to, có baseline mà thiếu index/cache thì đỏ). Postgres là service container thay cho `supabase db start`. Chưa chạy trên GitHub (chưa có remote).
+- [ ] sau live batch: mở PR bỏ stopword → lưu làm bằng chứng. PR cố tình bỏ stopword list → comment hiện chênh lệch, gate đỏ nếu tụt > 3 điểm. Giữ PR này làm **bằng chứng "gate chặn regression"** cho README, rồi đóng PR. (Cần `eval/baselines/main.json`, `eval/index/`, `eval/cache/` từ Task 3.1/3.4 và remote GitHub.)
+- [x] Commit `ci: retrieval eval gate with PR comment`.
 
 ### Task 6.3: `deploy.yml`
 
