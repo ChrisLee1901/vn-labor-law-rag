@@ -19,7 +19,7 @@ STREAM_HEADERS = {
 
 
 def sse(part: dict) -> bytes:
-    return b"data: " + json.dumps(part, ensure_ascii=False, separators=(",", ":")).encode() + b"\n\n"
+    return b"data: " + json.dumps(part, ensure_ascii=False, separators=(",", ":")).encode("utf-8", errors="replace") + b"\n\n"
 
 
 def start(message_id: str) -> dict:

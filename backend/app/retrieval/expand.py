@@ -6,7 +6,7 @@ from psycopg import AsyncConnection
 
 from app.legal.ids import make_id
 
-_COLS = """a.id, a.doc_code, d.number, coalesce(a.number, 0), coalesce(a.title, ''), coalesce(a.content, ''),
+_COLS = """a.id, a.doc_code, coalesce(d.number, a.doc_code), coalesce(a.number, 0), coalesce(a.title, ''), coalesce(a.content, ''),
            d.effective_from, d.effective_to, coalesce(d.status, '')"""
 
 # Điều (hoặc Phụ lục) chứa một legal_refs.src_id: bỏ hậu tố khoản/điểm/mục.

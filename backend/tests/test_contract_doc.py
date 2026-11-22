@@ -1,11 +1,8 @@
 """Chống lệch giữa docs/api-contract.md và code phát stream / routes."""
 
-import importlib.util
 import inspect
 import re
 from pathlib import Path
-
-import pytest
 
 from app import stream
 
@@ -65,11 +62,11 @@ def test_guard_detects_changed_order():
     assert "part order line" in missing_from_doc(DOC.replace(ORDER, "start → finish"))
 
 
-@pytest.mark.skipif(importlib.util.find_spec("app.main") is None, reason="app.main chưa có (Task 4.4)")
 def test_real_routes_in_contract():
     from app.main import app
 
-    internal = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
-    paths = {r.path for r in app.routes if getattr(r, "methods", None) and r.path not in internal}
-    documented = {p for _, p in table_endpoints(DOC)}
-    assert paths <= documented, paths - documented
+    # openapi() thay vì app.routes: FastAPI mới bọc router con trong _IncludedRouter nên app.routes không liệt kê route thật.
+    routes = {(m.upper(), p) for p, ops in app.openapi()["paths"].items() for m in ops}
+    documented = table_endpoints(DOC)
+    assert routes == ENDPOINTS, routes ^ ENDPOINTS
+    assert routes <= documented, routes - documented

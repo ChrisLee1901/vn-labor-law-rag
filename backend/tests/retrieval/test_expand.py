@@ -78,3 +78,10 @@ async def test_expand_forward_refs_ordered_numerically(sync_conn, aconn):
         c.execute("insert into legal_refs(index_version, src_id, dst_doc_code, dst_article, rel) values (1, %s, 'NUM-1', %s, 'cites')", (src, art))
     out = await expand(["NUM-1:D20"], aconn, 1, AS_OF)
     assert [d.id for d in out] == ["NUM-1:D20", "NUM-1:D2", "NUM-1:D10"]
+
+
+async def test_expand_null_doc_number_falls_back_to_code(sync_conn, aconn):
+    sync_conn.execute("insert into legal_docs(code, number, effective_from) values ('NONUM-1', null, '2025-01-01')")
+    sync_conn.execute("insert into articles(index_version, id, doc_code, number, content) values (1, 'NONUM-1:D1', 'NONUM-1', 1, 'x')")
+    out = await expand(["NONUM-1:D1"], aconn, 1, AS_OF)
+    assert out[0].doc_number == "NONUM-1"

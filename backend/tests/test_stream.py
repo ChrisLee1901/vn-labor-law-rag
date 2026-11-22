@@ -58,3 +58,7 @@ def test_builder_shapes():
 
 def test_sse_roundtrip_bytes():
     assert s.sse({"type": "finish"}) == b'data: {"type":"finish"}\n\n'
+
+
+def test_sse_replaces_lone_surrogates_instead_of_raising():
+    assert s.sse(s.text_delta("t", "a\ud800b")).startswith(b"data: ")

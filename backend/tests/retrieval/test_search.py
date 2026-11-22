@@ -102,3 +102,18 @@ async def test_fuzz_punctuation_never_sql_error(aconn):
             "select * from hybrid_search(%s::text, %s::text, null, 1, %s::date)",
             (build_tsquery(q), build_tsquery(strip_diacritics(q)), TODAY),
         )
+
+
+async def test_retrieve_records_spans(aconn):
+    class T:
+        names: list[str] = []
+
+        def span(self, name):
+            import contextlib
+
+            self.names.append(name)
+            return contextlib.nullcontext()
+
+    t = T()
+    await retrieve("luong toi thieu vung 1", TODAY, OFFLINE, aconn, 1, online=False, trace=t)
+    assert t.names == ["hybrid_search"]  # offline: không embed/rerank

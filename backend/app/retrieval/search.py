@@ -1,4 +1,5 @@
 """Hybrid retrieval: FTS + vector (RRF trong SQL) -> rerank qua gateway -> top Điều cha; ID nêu rõ trong câu hỏi được ghim lên đầu."""
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date
 
@@ -80,20 +81,26 @@ def _by_rrf(rows) -> list[Candidate]:
 
 
 async def retrieve(
-    question: str, as_of: date, gw: Gateway, conn: AsyncConnection, index_version: int, online: bool
+    question: str, as_of: date, gw: Gateway, conn: AsyncConnection, index_version: int, online: bool, trace=None
 ) -> list[Candidate]:
-    """Online: embed + hybrid + rerank. Offline (hoặc gateway lỗi): FTS-only, xếp theo RRF. Tối đa 6 Điều cha, ID ghim đứng đầu."""
+    """Online: embed + hybrid + rerank. Offline (hoặc gateway lỗi): FTS-only, xếp theo RRF. Tối đa 6 Điều cha, ID ghim đứng đầu.
+
+    `trace` (tùy chọn, app.tracing.Trace) ghi span embed / hybrid_search / rerank."""
+    span = trace.span if trace is not None else (lambda _name: nullcontext())
     vec = None
     if online:
         try:
-            vec = (await gw.embed([question]))[0]
+            with span("embed"):
+                vec = (await gw.embed([question]))[0]
         except LLMOffline:
             pass
-    rows = await _hybrid(conn, question, as_of, index_version, vec)
+    with span("hybrid_search"):
+        rows = await _hybrid(conn, question, as_of, index_version, vec)
     cands = _by_rrf(rows)
     if vec is not None and rows:
         try:
-            cands = await _rerank(conn, gw, question, rows, index_version)
+            with span("rerank"):
+                cands = await _rerank(conn, gw, question, rows, index_version)
         except LLMOffline:
             pass
     pinned = await _pinned(conn, question, index_version)
