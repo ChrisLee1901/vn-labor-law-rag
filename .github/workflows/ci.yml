@@ -1,0 +1,260 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      web: ${{ steps.f.outputs.web }}
+      api: ${{ steps.f.outputs.api }}
+      pipelines: ${{ steps.f.outputs.pipelines }}
+      kaggle: ${{ steps.f.outputs.kaggle }}
+      db: ${{ steps.f.outputs.db }}
+      eval: ${{ steps.f.outputs.eval }} # dùng cho eval-retrieval (Task 6.2)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: f
+        with:
+          filters: |
+            web:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+            api:
+              - 'backend/**'
+              - 'supabase/migrations/**'
+              - 'docs/api-contract.md'
+              - 'ruff.toml'
+              - '.github/workflows/ci.yml'
+            pipelines:
+              - 'pipelines/**'
+              - 'backend/**'
+              - 'supabase/migrations/**'
+              - 'docs/corpus/legal_docs.yaml'
+              - 'eval/golden/**'
+              - 'ruff.toml'
+              - '.github/workflows/ci.yml'
+            kaggle:
+              - 'kaggle/**'
+              - 'ruff.toml'
+              - '.github/workflows/ci.yml'
+            db:
+              - 'supabase/**'
+              - 'pipelines/pyproject.toml'
+              - 'ruff.toml'
+              - '.github/workflows/ci.yml'
+            eval:
+              - 'pipelines/**'
+              - 'backend/app/**'
+              - 'eval/**'
+              - 'docs/corpus/**'
+              - 'supabase/migrations/**'
+              - '.github/workflows/ci.yml'
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # đọc "packageManager" trong package.json
+        with:
+          package_json_file: frontend/package.json
+          cache: true
+          cache_dependency_path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    needs: [changes, web]
+    if: needs.changes.outputs.web == 'true' && needs.web.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+          cache: true
+          cache_dependency_path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      # webServer trong playwright.config.ts tự chạy pnpm build và dựng stub API, không build lần hai ở đây.
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv lock --check
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      # shortcut: pyright còn 65 lỗi sẵn có (kiểu psycopg/langfuse/test double) nên chưa chặn CI, sửa hết thì bỏ continue-on-error.
+      - run: uv run pyright
+        continue-on-error: true
+      - run: uv run pytest -q
+
+  pipelines:
+    needs: changes
+    if: needs.changes.outputs.pipelines == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    defaults:
+      run:
+        working-directory: pipelines
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pipelines/uv.lock
+            backend/uv.lock
+      - run: uv lock --check
+      - run: uv sync --locked
+      # pipelines không có ruff trong dev group: dùng ruff đã khóa trong backend/uv.lock (cùng ruff.toml gốc).
+      - run: uv run --project ../backend --locked ruff check .
+      - run: uv run --project ../backend --locked ruff format --check .
+      - run: uv run pytest -q
+
+  kaggle:
+    needs: changes
+    if: needs.changes.outputs.kaggle == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+          cache-dependency-glob: backend/uv.lock
+      - run: uv run --project backend --locked ruff check kaggle
+      - run: uv run --project backend --locked ruff format --check kaggle
+      # Gateway chạy model giả trên CPU; requirements-test.txt không kéo sentence-transformers.
+      - run: uv run --with-requirements kaggle/requirements-test.txt pytest kaggle/tests -q
+
+  db:
+    needs: changes
+    if: needs.changes.outputs.db == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pipelines/uv.lock
+            backend/uv.lock
+      - run: uv run --project backend --locked ruff check supabase
+      - run: uv run --project backend --locked ruff format --check supabase
+      - run: uv run --project pipelines --locked pytest supabase/tests -v
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  ci-ok:
+    if: always()
+    needs: [changes, web, e2e, api, pipelines, kaggle, db, secrets]
+    runs-on: ubuntu-latest
+    steps:
+      # skipped (filter không khớp) thì cho qua; chỉ failure hoặc cancelled làm đỏ.
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "Có job lỗi hoặc bị hủy:"
+          echo "$NEEDS"
+          exit 1

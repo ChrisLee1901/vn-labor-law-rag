@@ -6,4 +6,5 @@ description = "Tài liệu nguồn công khai, không chứa secret"
 paths = [
   '''docs/corpus/raw/''',
   '''docs/research/''',
+  '''pipelines/tests/fixtures/congbao_page.html''', # trang Công báo lưu làm fixture; VideoToken là mã nhúng sẵn trong HTML công khai
 ]
