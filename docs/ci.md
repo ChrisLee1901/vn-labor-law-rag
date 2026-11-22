@@ -58,6 +58,17 @@ Cách gỡ bootstrap: commit `eval/baselines/main.json` (cùng `eval/index/` và
 
 Hai job `deploy-*` chạy sau `ci-ok` và gọi `.github/workflows/deploy.yml` (không có trigger riêng, giống `eval-retrieval.yml`). Secrets, checklist `[USER]`, WAF, rollback và phương án dự phòng: [deploy.md](deploy.md). Chưa chạy trên GitHub lần nào.
 
+## Eval câu trả lời đầu-cuối (`eval-full`, thủ công)
+
+`.github/workflows/eval-full.yml`: chỉ `workflow_dispatch`, không bao giờ chạy theo lịch, push hay PR (Kaggle ToS: chỉ chạy khi chủ repo tự bật notebook). Input: `model_label` (bắt buộc, kiểm tra `^[A-Za-z0-9._-]{1,40}$` trong một step, qua env) và `base_url` (tùy chọn; trống thì lấy biến repository `PROD_URL`, không phải secret; thiếu cả hai thì job đỏ với thông báo rõ).
+
+Các bước: kiểm tra input → `GET <base>/api/health`, bắt buộc `llm == "online"` (không thì job đỏ, chưa có kết quả nào) → `rag_pipelines.eval.answer_eval` trên split `test` (80 câu, giãn cách 31 s để không chạm giới hạn 20 lượt / 10 phút theo IP, mất khoảng 45 đến 60 phút) → `eval/results/answers_<nhãn>_<ngày>.json` → job summary, artifact (`actions/upload-artifact`) → PR tự động (`peter-evans/create-pull-request`, nhánh `eval/answers-<nhãn>-<ngày>`). Quyền: `contents: write`, `pull-requests: write` ở cấp job; không dùng secret nào ngoài `GITHUB_TOKEN`. Định nghĩa chỉ số và schema: docstring của `pipelines/rag_pipelines/eval/answer_eval.py`; cách chạy tay và chạy trên backend local: [runbook-eval.md](runbook-eval.md).
+
+- **`ci-ok` không chạy trên PR này.** PR mở bằng `GITHUB_TOKEN` không kích hoạt workflow khác (quy tắc của GitHub, chống đệ quy). **[USER]** Trước khi merge: đẩy một commit rỗng lên nhánh `eval/answers-*` (`git commit --allow-empty`) hoặc đóng rồi mở lại PR, hoặc cấu hình PAT cho `create-pull-request` (khi đó thêm secret, ngoài phạm vi hiện tại).
+- **[USER]** Bật Settings, Actions, General, Workflow permissions, "Allow GitHub Actions to create and approve pull requests", nếu không bước mở PR lỗi 403. Đặt biến repository `PROD_URL` (Settings, Secrets and variables, Variables) là URL https gốc của deployment production.
+- 429 (giới hạn theo IP hoặc 300 lượt/ngày toàn cục) hết lượt chờ thì job đỏ và KHÔNG có file kết quả. Nếu chạy lại nhiều lần trong ngày, tổng số lượt có thể chạm trần toàn cục: dùng backend local (runbook-eval.md).
+- Kết quả đã merge vào `eval/results/` được đưa lên trang `/gioi-thieu` bằng `pnpm sync-eval` (xem design-system.md). Chạy tay, không có bước tự động.
+
 ## Ghi chú
 
 - Postgres cho test và cho gate eval là service container `pgvector/pgvector:pg17` trên runner, truyền qua `TEST_DATABASE_URL`. CI không dùng secret và không chạm project Supabase thật.

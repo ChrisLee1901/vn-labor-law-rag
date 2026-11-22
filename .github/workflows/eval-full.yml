@@ -1,0 +1,124 @@
+name: eval-full
+
+# Thủ công, chỉ khi chủ repo đã tự bật notebook Kaggle (docs/runbook-eval.md). KHÔNG có schedule/push/pull_request:
+# Kaggle ToS cấm giữ server chạy liên tục, và PR từ fork không được chạm tới backend production. Không dùng secret nào ngoài GITHUB_TOKEN mặc định.
+# Chạy eval câu trả lời tất định (rag_pipelines.eval.answer_eval) trên split test của API production, ghi eval/results/answers_<nhãn>_<ngày>.json,
+# upload artifact rồi mở PR tự động. PR mở bằng GITHUB_TOKEN KHÔNG kích hoạt workflow khác nên `ci-ok` sẽ không chạy: xem docs/ci.md (mục eval-full).
+on:
+  workflow_dispatch:
+    inputs:
+      model_label:
+        description: "Nhãn mô hình, khớp ^[A-Za-z0-9._-]{1,40}$ (vd Qwen3-8B-Q5_K_M)"
+        required: true
+        type: string
+      base_url:
+        description: "URL gốc https của API (tùy chọn). Trống thì dùng biến repository PROD_URL"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-full
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120 # 80 câu x (31 s giãn cách + vài chục giây trả lời), xem DEFAULT_DELAY_S
+    permissions:
+      contents: write # push nhánh eval/answers-*
+      pull-requests: write # mở PR
+    steps:
+      # input chỉ đi qua env, không bao giờ nằm trong thân `run:`
+      - name: Kiểm tra input
+        id: in
+        env:
+          MODEL_LABEL: ${{ inputs.model_label }}
+          INPUT_BASE_URL: ${{ inputs.base_url }}
+          PROD_URL: ${{ vars.PROD_URL }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$MODEL_LABEL" =~ ^[A-Za-z0-9._-]{1,40}$ ]]; then
+            echo "::error::model_label không hợp lệ: chỉ chữ, số, '.', '_', '-', dài 1 đến 40 ký tự."
+            exit 1
+          fi
+          base="${INPUT_BASE_URL:-$PROD_URL}"
+          if [ -z "$base" ]; then
+            echo "::error::Chưa có URL API: điền input base_url hoặc đặt biến repository PROD_URL (Settings, Secrets and variables, Variables)."
+            exit 1
+          fi
+          base="${base%/}"
+          if ! [[ "$base" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]]; then
+            echo "::error::URL API phải có dạng https://host[:cổng], không có đường dẫn."
+            exit 1
+          fi
+          day="$(date -u +%F)"
+          {
+            echo "base_url=$base"
+            echo "date=$day"
+            echo "file=eval/results/answers_${MODEL_LABEL}_${day}.json"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: API health, LLM phải online
+        env:
+          BASE_URL: ${{ steps.in.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          body="$(curl -fsS --max-time 30 --retry 2 "$BASE_URL/api/health")" || {
+            echo "::error::Không gọi được /api/health. Kiểm tra URL và deployment."
+            exit 1
+          }
+          llm="$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("llm",""))' 2>/dev/null || echo invalid)"
+          if [ "$llm" != "online" ]; then
+            echo "::error::LLM không online (llm=$llm). Bật notebook Kaggle theo docs/runbook-kaggle.md rồi chạy lại. Chưa có kết quả nào được tạo."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pipelines/uv.lock
+            backend/uv.lock
+
+      # Thoát khác 0 (429 hết lượt chờ, LLM offline giữa chừng, backend hỏng) thì không có file kết quả và các bước sau bị bỏ qua.
+      - name: Eval câu trả lời (split test)
+        env:
+          EVAL_BASE_URL: ${{ steps.in.outputs.base_url }}
+          MODEL_LABEL: ${{ inputs.model_label }}
+          RESULT_DATE: ${{ steps.in.outputs.date }}
+          RESULT_FILE: ${{ steps.in.outputs.file }}
+        run: |
+          uv run --project pipelines --locked python -m rag_pipelines.eval.answer_eval \
+            --label "$MODEL_LABEL" --date "$RESULT_DATE" --out "$RESULT_FILE" --markdown answers-summary.md
+
+      - name: Job summary
+        if: always()
+        run: '[ -f answers-summary.md ] && cat answers-summary.md >> "$GITHUB_STEP_SUMMARY" || true'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: answers-${{ inputs.model_label }}-${{ steps.in.outputs.date }}
+          path: ${{ steps.in.outputs.file }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          add-paths: ${{ steps.in.outputs.file }}
+          branch: eval/answers-${{ inputs.model_label }}-${{ steps.in.outputs.date }}
+          delete-branch: true
+          commit-message: "eval: answers ${{ inputs.model_label }} ${{ steps.in.outputs.date }}"
+          title: "eval: answers ${{ inputs.model_label }} ${{ steps.in.outputs.date }}"
+          body: |
+            Kết quả `answer_eval` (split test) do workflow `eval-full` tạo. Chỉ thêm một file trong `eval/results/`; số liệu đầy đủ ở artifact và job summary của lần chạy.
+
+            PR này được mở bằng `GITHUB_TOKEN` nên **`ci-ok` không tự chạy**. Trước khi merge: đẩy một commit rỗng lên nhánh hoặc đóng rồi mở lại PR (xem docs/ci.md, mục eval-full).
+            Sau khi merge, chạy `pnpm sync-eval` trong `frontend/` để cập nhật `src/content/eval.json`.
