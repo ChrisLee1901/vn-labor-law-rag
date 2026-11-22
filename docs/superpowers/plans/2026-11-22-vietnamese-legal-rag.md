@@ -613,9 +613,9 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 ### Task 6.5: Keep-alive
 
-- [ ] `vercel.json`: thêm cron `0 3 * * *` gọi `/api/cron/keepalive` (Hobby chỉ cho cron hằng ngày). Nếu Services không nhận cron ở root, ghi lại và dùng phương án GitHub.
-- [ ] `.github/workflows/keepalive.yml`: `schedule: "0 2 */3 * *"`, `curl -fsS -H "Authorization: Bearer $CRON_SECRET" $PROD_URL/api/cron/keepalive`.
-- [ ] Commit `ops: Supabase keep-alive (Vercel cron + GitHub schedule)`.
+- [ ] `vercel.json`: thêm cron `0 3 * * *` gọi `/api/cron/keepalive` (Hobby chỉ cho cron hằng ngày). Nếu Services không nhận cron ở root, ghi lại và dùng phương án GitHub. **Chưa làm:** `vercel.json` chưa tồn tại (Task 0.4, `[USER]`, cần spike Vercel Services); không tạo file một phần. Snippet và ghi chú đã nằm ở `docs/deploy.md` (mục Keep-alive, checklist 10). Tick khi Task 0.4 xong.
+- [x] `.github/workflows/keepalive.yml`: `schedule: "0 2 */3 * *"`, `curl -fsS -H "Authorization: Bearer $CRON_SECRET" $PROD_URL/api/cron/keepalive`. (actionlint sạch; thân step chạy thử với server giả: 204 -> 0, 401 -> 22, không kết nối -> 7, thiếu env -> 1. Chưa chạy trên GitHub. `[USER]`: secret `CRON_SECRET`, biến `PROD_URL`.)
+- [x] Commit `ops: Supabase keep-alive (Vercel cron + GitHub schedule)`.
 
 ---
 

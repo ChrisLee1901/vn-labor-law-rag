@@ -29,6 +29,7 @@ Workflow: `.github/workflows/ci.yml` (chạy trên `pull_request` và `push` và
 | `ci-ok` | luôn | tổng hợp |
 | `deploy-preview` | PR cùng repo (không fork, không Dependabot), sau `ci-ok` xanh | workflow tái sử dụng `deploy.yml`: Vercel preview, comment URL, Playwright offline + docs. Không nằm trong `needs` của `ci-ok` |
 | `deploy-prod` | `push` vào `main`, sau `ci-ok` xanh | `deploy.yml`: `migrate` (Environment `production`, guard migration) rồi `deploy` (Vercel `--prod`, smoke `/api/health`). Không nằm trong `needs` của `ci-ok` |
+| `keepalive` (workflow riêng) | `schedule` `0 2 */3 * *` và `workflow_dispatch`, không chạy trên PR/push | `curl` `/api/cron/keepalive` trên production giữ Supabase không bị pause; thiếu `CRON_SECRET`/`PROD_URL` thì đỏ. GitHub tự tắt workflow theo lịch sau 60 ngày repo không hoạt động. Xem [deploy.md](deploy.md) |
 
 Sửa `.github/workflows/ci.yml` thì mọi filter đều khớp.
 

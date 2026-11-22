@@ -48,6 +48,9 @@ Không có giá trị thật nào nằm trong repo.
 | `SUPABASE_DB_PASSWORD` | **Environment `production`** | `supabase db push` | mật khẩu database lúc tạo project |
 | `SUPABASE_PROJECT_REF` | **Environment `production`** | `supabase link --project-ref` | Supabase, Project Settings, General |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` (tùy chọn nhưng nên có) | repo (preview cần) | Playwright trên preview, smoke production | Vercel, Deployment Protection, Protection Bypass for Automation |
+| `CRON_SECRET` | repo | `keepalive.yml` (header `Authorization: Bearer`) | chuỗi ngẫu nhiên dài, **cùng giá trị** với biến Vercel `CRON_SECRET` |
+
+Biến repository (không phải secret): `PROD_URL` = URL https gốc của production (Task 6.4; `eval-full.yml` và `keepalive.yml` dùng).
 
 Đánh đổi: `VERCEL_TOKEN` và bypass secret phải ở cấp repo vì job `preview` (không có Environment) cần chúng, nên một PR cùng repo của người có quyền ghi có thể đọc chúng. Giảm rủi ro bằng cách tạo Vercel token chỉ cho team/project này (không dùng token tài khoản), và coi quyền ghi vào repo là quyền deploy preview. Secret Supabase thì không lộ cho PR: Environment `production` chỉ chạy được từ `main`.
 
@@ -83,6 +86,21 @@ Trang `/van-ban*` gọi API từ server (`frontend/src/lib/api-server.ts`): `API
 6. Vercel, Project, Firewall: tạo WAF rate-limit (mục dưới).
 7. Lần đầu: nếu project Supabase đã có bảng tạo tay trước khi dùng CLI thì `supabase db push` sẽ đụng, khi đó dùng `supabase migration repair` cho các migration đã áp. Merge một PR vào `main` và xem job `migrate` + `deploy`.
 8. Kiểm tra cuối (chưa làm, cần live batch): merge một PR -> production cập nhật, `/api/health` trả `db: "ok"`.
+9. Keep-alive (Task 6.5): thêm secret repo `CRON_SECRET` (cùng giá trị với biến Vercel `CRON_SECRET`) và đặt biến repository `PROD_URL`. Chạy tay `keepalive` bằng Actions, Run workflow, phải xanh.
+10. Khi Task 0.4 tạo `vercel.json`, thêm cron Vercel (mục Keep-alive bên dưới).
+
+## Keep-alive Supabase (Task 6.5)
+
+Supabase free pause project sau 7 ngày không hoạt động. `GET /api/cron/keepalive` (backend/app/api/cron.py) trả **204** khi `Authorization: Bearer $CRON_SECRET` đúng, **401** khi sai hoặc thiếu; bên trong chạy `select 1` qua pooler, tính là hoạt động DB. Hai cơ chế:
+
+1. **Chính: GitHub schedule** `.github/workflows/keepalive.yml`, `cron: "0 2 */3 * *"` (mỗi 3 ngày, UTC) và `workflow_dispatch`. `curl -fsS --max-time 30 --retry 3 --retry-delay 10`, secret và `PROD_URL` chỉ qua `env:`. Thiếu `CRON_SECRET` hoặc `PROD_URL` thì job **đỏ** kèm thông báo (bỏ qua im lặng thì Supabase bị pause mà không ai biết). Hệ quả: repo mới chưa cấu hình sẽ đỏ theo lịch cho đến khi làm checklist mục 9.
+2. **Phụ: Vercel Cron** hằng ngày. Thêm vào `vercel.json` khi Task 0.4 tạo file này (chưa có file nên chưa thêm, tránh tạo `vercel.json` một phần làm lệch cấu hình Services):
+   ```json
+   {"crons":[{"path":"/api/cron/keepalive","schedule":"0 3 * * *"}]}
+   ```
+   Hobby chỉ cho cron hằng ngày. Khi biến môi trường `CRON_SECRET` được đặt, Vercel tự gửi `Authorization: Bearer $CRON_SECRET`. Nếu Vercel Services không nhận cron ở root `vercel.json`, ghi vào `docs/spikes.md` và chỉ dựa vào GitHub schedule.
+
+Giới hạn đã biết: GitHub **tự tắt workflow theo lịch** sau 60 ngày repo không có hoạt động (chủ repo phải bật lại ở tab Actions hoặc đẩy một commit). 60 ngày dài hơn 7 ngày rất nhiều, nên Vercel Cron mới là lớp bảo hiểm thật sự khi đã có. Trong lúc đó, nhớ bật lại workflow nếu repo yên 60 ngày. Chưa chạy trên GitHub, Vercel hay Supabase lần nào; endpoint được kiểm bằng `backend/tests/api/test_misc_endpoints.py`.
 
 ## WAF rate limit (ruling R29, Task 4.5) `[USER]`
 

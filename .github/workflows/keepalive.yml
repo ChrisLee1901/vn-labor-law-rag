@@ -1,0 +1,39 @@
+name: keepalive
+
+# Cơ chế chính giữ Supabase free không bị pause (pause sau 7 ngày không hoạt động): gọi /api/cron/keepalive (204, chạy `select 1` qua pooler) mỗi 3 ngày.
+# Cơ chế thứ hai là Vercel Cron hằng ngày trong vercel.json (chưa có, xem docs/deploy.md). GitHub tự tắt workflow theo lịch sau 60 ngày repo không có hoạt động.
+# Thiếu CRON_SECRET hoặc PROD_URL thì đỏ, không bỏ qua im lặng. Không dùng secret nào khác.
+on:
+  schedule:
+    - cron: "0 2 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # secret và biến chỉ đi qua env; không bật xtrace, không dùng curl -v để header không lọt vào log
+      - name: Gọi /api/cron/keepalive
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PROD_URL: ${{ vars.PROD_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROD_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::Thiếu biến repository PROD_URL hoặc secret CRON_SECRET: keep-alive không chạy được, Supabase sẽ bị pause sau 7 ngày. Xem docs/deploy.md."
+            exit 1
+          fi
+          curl -fsS --max-time 30 --retry 3 --retry-delay 10 \
+            -H "Authorization: Bearer $CRON_SECRET" "${PROD_URL%/}/api/cron/keepalive"
