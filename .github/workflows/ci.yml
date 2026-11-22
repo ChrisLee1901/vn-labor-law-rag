@@ -39,6 +39,7 @@ jobs:
               - 'backend/**'
               - 'supabase/migrations/**'
               - 'docs/api-contract.md'
+              - 'scripts/pyright_ratchet.py'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             pipelines:
@@ -149,9 +150,8 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      # shortcut: pyright còn 65 lỗi sẵn có (kiểu psycopg/langfuse/test double) nên chưa chặn CI, sửa hết thì bỏ continue-on-error.
-      - run: uv run pyright
-        continue-on-error: true
+      # shortcut: ratchet ở baseline 65 lỗi sẵn có (backend/pyright-baseline.txt), lỗi mới thì đỏ; burn baseline về 0 rồi đổi sang `uv run pyright`.
+      - run: uv run python ../scripts/pyright_ratchet.py pyright-baseline.txt
       - run: uv run pytest -q
 
   pipelines:

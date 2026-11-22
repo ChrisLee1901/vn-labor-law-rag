@@ -20,7 +20,7 @@ Workflow: `.github/workflows/ci.yml` (chạy trên `pull_request` và `push` và
 | `changes` | luôn | tính filter `web`, `api`, `pipelines`, `kaggle`, `db`, `eval` |
 | `web` | `frontend/**` | pnpm install, lint, typecheck, vitest, build |
 | `e2e` | `frontend/**`, sau `web` xanh | Playwright (chromium), upload `playwright-report` khi lỗi |
-| `api` | `backend/**`, `supabase/migrations/**`, `docs/api-contract.md`, `ruff.toml` | `uv lock --check`, ruff, pyright (chưa chặn), pytest + Postgres pgvector |
+| `api` | `backend/**`, `supabase/migrations/**`, `docs/api-contract.md`, `scripts/pyright_ratchet.py`, `ruff.toml` | `uv lock --check`, ruff, pyright ratchet, pytest + Postgres pgvector |
 | `pipelines` | `pipelines/**`, `backend/**`, `supabase/migrations/**`, `docs/corpus/legal_docs.yaml`, `eval/golden/**`, `ruff.toml` | như `api`, ruff lấy từ backend |
 | `kaggle` | `kaggle/**`, `ruff.toml` | ruff, pytest gateway với model giả (CPU) |
 | `db` | `supabase/**`, `pipelines/pyproject.toml`, `ruff.toml` | pytest `supabase/tests` trên Postgres pgvector |
@@ -33,5 +33,5 @@ Sửa `.github/workflows/ci.yml` thì mọi filter đều khớp. Filter `eval` 
 
 - Postgres cho test là service container `pgvector/pgvector:pg17` trên runner, truyền qua `TEST_DATABASE_URL`. CI không dùng secret và không chạm project Supabase thật.
 - Ruff dùng chung `ruff.toml` gốc, bản ruff khóa trong `backend/uv.lock`. `kaggle/serve.ipynb` bị loại (file sinh ra, chạy `python kaggle/build_notebook.py` sau khi sửa `kaggle/gateway.py`).
-- `pyright` ở job `api` đang `continue-on-error` vì còn 65 lỗi kiểu có sẵn. Sửa hết rồi bỏ cờ này.
+- `pyright` ở job `api` chạy dạng ratchet (`scripts/pyright_ratchet.py`): đếm lỗi, so với `backend/pyright-baseline.txt` (hiện 65), đỏ nếu nhiều hơn baseline, in gợi ý hạ baseline khi ít hơn. Việc tiếp theo: đưa baseline về 0 rồi đổi step thành `uv run pyright` (plan Task 7.4).
 - Hook cục bộ: `pre-commit install` (ruff check, ruff format, gitleaks).

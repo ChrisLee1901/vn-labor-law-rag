@@ -647,6 +647,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 - [ ] README theo thứ tự: GIF/video → một đoạn giới thiệu → sơ đồ → bảng số liệu (ablation, latency, refusal) → "Chạy thử" (link production + ghi chú "LLM chỉ bật khi demo; chế độ ngoại tuyến vẫn hoạt động") → kiến trúc chi tiết → cách chạy lại từ clone mới → CI/CD (ảnh PR gate) → giới hạn và rủi ro (Kaggle ToS, luật đang sửa) → nguồn dữ liệu (Điều 15 Luật SHTT) → disclaimer.
 - [ ] Kiểm tra: một subagent mới clone repo và làm theo README, chạy được `uv run pytest`, `pnpm test`, `supabase start` + migration + nạp frozen index, mà không cần hỏi thêm.
 - [ ] Commit `docs: README, architecture, ADRs`.
+- [ ] pyright baseline xuống 0 (xóa continue/ratchet trong ci.yml)
 
 ---
 
