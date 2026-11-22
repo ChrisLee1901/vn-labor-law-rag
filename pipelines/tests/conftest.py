@@ -37,5 +37,5 @@ def conn(db_url):
     """Clean tables and active_index_version=1 for every test."""
     with psycopg.connect(db_url, autocommit=True) as c:
         c.execute("truncate chunks, legal_refs, articles, legal_docs cascade")
-        c.execute("update app_config set value = '1' where key = 'active_index_version'")
+        c.execute("insert into app_config(key, value) values ('active_index_version', '1') on conflict (key) do update set value = excluded.value")
         yield c
