@@ -20,7 +20,7 @@ export function TocList({ groups, appendices }: { groups: ChapterGroup[]; append
     <div className="space-y-4 text-sm">
       {groups.map((g, i) => (
         <section key={i}>
-          {g.chapter && <h2 className="mb-1 text-sm font-semibold text-muted-foreground">{g.chapter}</h2>}
+          {g.chapter && <p className="mb-1 text-sm font-semibold text-muted-foreground">{g.chapter}</p>}
           <ol>
             {g.articles.map((a) => (
               <Item key={a.id} a={a} />
@@ -30,7 +30,7 @@ export function TocList({ groups, appendices }: { groups: ChapterGroup[]; append
       ))}
       {appendices.length > 0 && (
         <section>
-          <h2 className="mb-1 text-sm font-semibold text-muted-foreground">Phụ lục</h2>
+          <p className="mb-1 text-sm font-semibold text-muted-foreground">Phụ lục</p>
           <ol>
             {appendices.map((a) => (
               <Item key={a.id} a={a} />

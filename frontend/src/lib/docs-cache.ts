@@ -58,8 +58,9 @@ export interface Effectiveness {
 }
 
 export const vnDate = (iso: string) => iso.split("-").reverse().join("/");
-const isoToday = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** "Hôm nay" theo giờ Việt Nam (YYYY-MM-DD), không phụ thuộc múi giờ của server/trình duyệt. */
+const VN_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+const isoToday = (d: Date) => VN_DAY.format(d);
 
 /** Cùng quy ước với truy hồi: hiệu lực khi from <= hôm nay < to. */
 export function effectiveness(doc: Pick<DocSummary, "effective_from" | "effective_to">, now = new Date()): Effectiveness {

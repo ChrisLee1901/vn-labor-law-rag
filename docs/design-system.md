@@ -79,7 +79,7 @@ Tiêu đề luôn đứng thẳng (không italic).
 - `EffectivenessBadge` (`src/components/effectiveness-badge.tsx`) dùng chung với chat; bộ `status-*` như mục Hỏi đáp.
 - Chi tiết: đầu trang có liên kết quay lại, số hiệu, tên (`h1`), huy hiệu, "Được thay thế bởi {số hiệu}" (liên kết), meta `dl`, liên kết nguồn ngoài (chỉ http/https, `rel="noopener noreferrer"`). Thân bài ≥ lg hai cột: mục lục `16rem` dính (`sticky top-4`, cuộn riêng) và nội dung; dưới lg mục lục là `<details>` "Mục lục". Chương là `h2`, Điều là `h3` có `id` `D{n}` (Điều 12a: `D12a`), phụ lục `PL{n}`.
 - Điều được trỏ tới (`:target`): viền trái 2 px và gạch chân tiêu đề bằng `cite-foreground`; thêm nền `cite` trong 3 giây (`data-active`, do `HashHighlight` đặt, kèm cuộn mượt, tắt khi `prefers-reduced-motion`). Nội dung điều là chữ trần `white-space: pre-line`, không markdown/HTML. `content-visibility: auto` trên từng Điều để văn bản dài (BLLĐ 220 Điều) không nặng.
-- Render: cả hai trang `force-dynamic` (không gọi API lúc build, không đóng băng thẻ lỗi vào trang tĩnh); dữ liệu vẫn cache 1 giờ qua `fetch(..., { next: { revalidate: 3600 } })`. Gốc API phía server: `getApiBase()` trong `src/lib/api-server.ts`.
+- Render: cả hai trang `force-dynamic`, không phải ISR: build không gọi API, thẻ lỗi không bị đóng băng vào trang tĩnh, mỗi lượt xem vẫn chạy một function. Dữ liệu trúng Data Cache 1 giờ nhờ `fetch(..., { next: { revalidate: 3600 } })` (kiểm chứng Next 16.4.6, `patch-fetch.js`); không thêm `cache: "no-store"` hay `fetchCache` vì sẽ âm thầm tắt cache này. Mục lục render hai lần (dính ở ≥ lg, `<details>` ở dưới lg, đóng lại sau khi bấm liên kết, cao tối đa 60dvh); tên chương trong mục lục là chữ thường, không phải heading, để điều hướng heading không bị trùng. Gốc API phía server: `getApiBase()` trong `src/lib/api-server.ts`.
 
 ## Dependencies
 
@@ -92,6 +92,6 @@ Tiêu đề luôn đứng thẳng (không italic).
 ## Biến môi trường
 
 - `API_ORIGIN`: đích rewrite `/api/*`. Khi chạy `next dev` mặc định `http://127.0.0.1:8000`. Ở production không đặt thì không có rewrite (`vercel.json`, Task 6.3, định tuyến). Logic ở `src/lib/api-rewrites.ts`.
-- Gọi API từ server component (`/van-ban*`): `API_ORIGIN` -> `NEXT_PUBLIC_SITE_URL` -> `https://$VERCEL_URL` -> `http://127.0.0.1:8000` (chỉ `NODE_ENV=development`) -> lỗi rõ ràng.
+- Gọi API từ server component (`/van-ban*`): `API_ORIGIN` -> `NEXT_PUBLIC_SITE_URL` -> `https://$VERCEL_PROJECT_PRODUCTION_URL` -> `https://$VERCEL_URL` -> `http://127.0.0.1:8000` (chỉ `NODE_ENV=development`) -> lỗi rõ ràng. Production PHẢI đặt `API_ORIGIN` (hoặc `NEXT_PUBLIC_SITE_URL`) tường minh vì URL deployment có thể bị Deployment Protection trả 401 (Task 6.3 sẽ đặt); `VERCEL_*` chỉ là dự phòng. "Hôm nay" của huy hiệu hiệu lực tính theo `Asia/Ho_Chi_Minh`.
 - `NEXT_PUBLIC_MOCK_CHAT=1`: trang chat gọi `/api/mock/chat` (route dev, 404 khi `NODE_ENV=production`) thay cho `/api/chat`. Inlined lúc build.
 - `NEXT_PUBLIC_REPO_URL`: liên kết GitHub ở footer, ẩn khi không đặt.

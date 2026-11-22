@@ -13,8 +13,9 @@ export const metadata: Metadata = {
   description: "Các văn bản pháp luật lao động và bảo hiểm xã hội dùng làm căn cứ cho câu trả lời.",
 };
 
-// Render theo yêu cầu: không gọi API lúc build (build offline vẫn qua) và không đóng băng thẻ lỗi vào trang tĩnh.
-// Dữ liệu vẫn được cache 1 giờ ở tầng fetch (`next.revalidate`, xem api-server.ts).
+// Render theo yêu cầu (không phải ISR): build không gọi API (build offline vẫn qua) và thẻ lỗi không bị đóng băng
+// vào trang tĩnh. Mỗi lượt xem vẫn chạy function, nhưng fetch có `next.revalidate: 3600` nên trúng Data Cache
+// (xem api-server.ts). Không thêm `cache: "no-store"`/`fetchCache`: sẽ tắt cache 1 giờ.
 export const dynamic = "force-dynamic";
 
 function DocCard({ doc, now }: { doc: DocSummary; now: Date }) {
@@ -22,7 +23,7 @@ function DocCard({ doc, now }: { doc: DocSummary; now: Date }) {
     <li className="space-y-3 rounded-md border bg-card p-4">
       <div className="space-y-1">
         {doc.number && <p className="text-sm font-medium text-muted-foreground">{doc.number}</p>}
-        <h2 className="text-lg leading-snug">
+        <h2 className="text-lg leading-snug [overflow-wrap:anywhere]">
           <Link href={`/van-ban/${doc.code}`} className={cn("underline-offset-4 hover:underline", focusRing)}>
             {doc.title ?? doc.number ?? doc.code}
           </Link>
@@ -55,7 +56,9 @@ export default async function DocsPage() {
           Các văn bản trợ lý dùng làm căn cứ. Đang hiệu lực xếp trước, trong mỗi nhóm văn bản mới nhất xếp trước.
         </p>
       </header>
-      {docs && docs.length > 0 ? (
+      {docs?.length === 0 ? (
+        <p className="text-muted-foreground">Chưa có văn bản nào.</p>
+      ) : docs ? (
         <ul className="grid gap-4 sm:grid-cols-2">
           {sortDocs(docs, now).map((d) => (
             <DocCard key={d.code} doc={d} now={now} />

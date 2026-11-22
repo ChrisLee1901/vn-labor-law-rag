@@ -8,9 +8,11 @@ describe("getApiBase", () => {
       "https://api.test",
     );
   });
-  it("then NEXT_PUBLIC_SITE_URL, then VERCEL_URL", () => {
-    expect(getApiBase({ NEXT_PUBLIC_SITE_URL: "https://site.test/", VERCEL_URL: "x.vercel.app" })).toBe("https://site.test");
-    expect(getApiBase({ VERCEL_URL: "x.vercel.app", NODE_ENV: "production" })).toBe("https://x.vercel.app");
+  it("then NEXT_PUBLIC_SITE_URL, then VERCEL_PROJECT_PRODUCTION_URL, then VERCEL_URL", () => {
+    const v = { VERCEL_PROJECT_PRODUCTION_URL: "app.example.com", VERCEL_URL: "x-abc.vercel.app", NODE_ENV: "production" };
+    expect(getApiBase({ NEXT_PUBLIC_SITE_URL: "https://site.test/", ...v })).toBe("https://site.test");
+    expect(getApiBase(v)).toBe("https://app.example.com");
+    expect(getApiBase({ VERCEL_URL: "x-abc.vercel.app", NODE_ENV: "production" })).toBe("https://x-abc.vercel.app");
   });
   it("falls back to the local backend only in development", () => {
     expect(getApiBase({ NODE_ENV: "development" })).toBe("http://127.0.0.1:8000");
@@ -50,9 +52,14 @@ describe("fetchDocs / fetchDocDetail", () => {
     stub({ ok: false, status: 500 });
     await expect(fetchDocDetail("BLLD")).rejects.toThrow();
   });
-  it("encodes the code and returns the body", async () => {
+  it("returns the body and keeps the revalidate option", async () => {
     const f = stub({ json: async () => DETAIL });
     expect(await fetchDocDetail("ND145-2020")).toEqual(DETAIL);
     expect(f).toHaveBeenCalledWith("https://api.test/api/docs/ND145-2020", { next: { revalidate: 3600 } });
+  });
+  it("percent-encodes the code in the URL", async () => {
+    const f = stub({ json: async () => DETAIL });
+    await fetchDocDetail("a b/c");
+    expect(f.mock.calls[0][0]).toBe("https://api.test/api/docs/a%20b%2Fc");
   });
 });

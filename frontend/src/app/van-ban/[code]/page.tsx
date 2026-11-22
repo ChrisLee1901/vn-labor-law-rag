@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocsError } from "@/components/docs/docs-error";
 import { HashHighlight } from "@/components/docs/hash-highlight";
+import { MobileToc } from "@/components/docs/mobile-toc";
 import { TocList } from "@/components/docs/toc";
 import { EffectivenessBadge } from "@/components/effectiveness-badge";
 import type { ArticleItem, DocDetailResponse } from "@/lib/api-types";
@@ -11,7 +12,8 @@ import { effectiveness, vnDate } from "@/lib/docs-cache";
 import { articleAnchor, articleHeading, DOC_TYPE_LABEL, groupByChapter, isValidDocCode } from "@/lib/docs-view";
 import { cn, focusRing } from "@/lib/utils";
 
-// Xem ghi chú ở van-ban/page.tsx: render theo yêu cầu, dữ liệu cache 1 giờ ở tầng fetch.
+// Render theo yêu cầu (không phải ISR), dữ liệu trúng Data Cache 1 giờ nhờ `next.revalidate` trong api-server.ts.
+// Không thêm `cache: "no-store"`/`fetchCache`: sẽ tắt cache đó. Chi tiết ở van-ban/page.tsx.
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ code: string }> };
@@ -71,7 +73,7 @@ export default async function DocPage({ params }: Props) {
         </Link>
         <div className="space-y-1">
           {doc.number && <p className="text-sm font-medium text-muted-foreground">{doc.number}</p>}
-          <h1 className="text-2xl sm:text-3xl">{doc.title ?? doc.number ?? doc.code}</h1>
+          <h1 className="text-2xl [overflow-wrap:anywhere] sm:text-3xl">{doc.title ?? doc.number ?? doc.code}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <EffectivenessBadge eff={effectiveness(doc)} />
@@ -104,12 +106,7 @@ export default async function DocPage({ params }: Props) {
       </header>
 
       <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-10">
-        <details className="mb-6 rounded-md border bg-card p-3 lg:hidden">
-          <summary className={cn("cursor-pointer font-medium", focusRing)}>Mục lục</summary>
-          <nav aria-label="Mục lục" className="mt-3">
-            {toc}
-          </nav>
-        </details>
+        <MobileToc>{toc}</MobileToc>
         <nav
           aria-label="Mục lục"
           className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] self-start overflow-y-auto pr-2 lg:block"
@@ -156,10 +153,10 @@ function ArticleBlock({ a }: { a: ArticleItem }) {
       id={articleAnchor(a)}
       className="group/art scroll-mt-4 border-l-2 border-transparent pl-4 transition-colors [contain-intrinsic-size:auto_10rem] [content-visibility:auto] target:border-cite-foreground data-[active=true]:bg-cite"
     >
-      <h3 className="text-base group-target/art:underline group-target/art:decoration-cite-foreground group-target/art:decoration-2 group-target/art:underline-offset-4">
+      <h3 className="text-base [overflow-wrap:anywhere] group-target/art:underline group-target/art:decoration-cite-foreground group-target/art:decoration-2 group-target/art:underline-offset-4">
         {articleHeading(a)}
       </h3>
-      <p className="mt-2 max-w-[var(--measure)] whitespace-pre-line">{a.content}</p>
+      <p className="mt-2 max-w-[var(--measure)] whitespace-pre-line [overflow-wrap:anywhere]">{a.content}</p>
     </article>
   );
 }

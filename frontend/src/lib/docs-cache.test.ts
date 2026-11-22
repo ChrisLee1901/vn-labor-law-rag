@@ -14,6 +14,13 @@ describe("effectiveness", () => {
       tone: "expired",
     });
   });
+  it("computes today in Vietnam time (UTC+7), not the host timezone", () => {
+    const doc = { effective_from: "2026-02-14", effective_to: null };
+    // 18:00Z ngày 13/02 = 01:00 ngày 14/02 giờ VN: đã có hiệu lực.
+    expect(effectiveness(doc, new Date("2026-02-13T18:00:00Z")).tone).toBe("active");
+    // 16:59Z = 23:59 ngày 13/02 giờ VN: chưa.
+    expect(effectiveness(doc, new Date("2026-02-13T16:59:00Z")).tone).toBe("future");
+  });
   it("treats effective_to as exclusive", () => {
     expect(effectiveness({ effective_from: "2020-01-01", effective_to: "2026-11-22" }, NOW).tone).toBe("expired");
     expect(effectiveness({ effective_from: "2020-01-01", effective_to: "2026-11-23" }, NOW).tone).toBe("active");

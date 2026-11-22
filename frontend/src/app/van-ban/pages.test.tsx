@@ -52,10 +52,11 @@ describe("/van-ban", () => {
     expect(screen.getByRole("link", { name: "Thử lại" })).toHaveAttribute("href", "/van-ban");
   });
 
-  it("treats an empty list as an error card", async () => {
+  it("shows a distinct message (not the error card) for an empty list", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply(200, [])));
     render(await DocsPage());
-    expect(screen.getByText(/Không tải được danh sách văn bản/)).toBeInTheDocument();
+    expect(screen.getByText("Chưa có văn bản nào.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 
@@ -68,7 +69,9 @@ describe("/van-ban/[code]", () => {
     for (const id of ["D1", "D12", "D12a", "D20", "PL1"]) expect(container.querySelector(`article#${id}`)).not.toBeNull();
     expect(container.querySelector("article#D12 h3")).toHaveTextContent("Điều 12. Hợp đồng lao động");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Quy định chi tiết một số điều của Bộ luật Lao động");
+    expect(screen.queryByRole("heading", { name: "Chương II. Tiền lương", level: 2 })).toBeInTheDocument();
     const toc = screen.getAllByRole("navigation", { name: "Mục lục" })[0];
+    expect(within(toc).queryAllByRole("heading")).toHaveLength(0);
     expect(within(toc).getByRole("link", { name: /Điều 20\. Tiền lương/ })).toHaveAttribute("href", "#D20");
     expect(within(toc).getByRole("link", { name: /Phụ lục 1/ })).toHaveAttribute("href", "#PL1");
     expect(within(toc).getByText("Chương II. Tiền lương")).toBeInTheDocument();
