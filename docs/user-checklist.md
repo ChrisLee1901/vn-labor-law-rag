@@ -18,7 +18,7 @@ Nhắc an toàn (luật cứng trong `CLAUDE.md`):
 ## Trạng thái hiện tại (đã kiểm tra)
 
 - Nhánh là `feat/rag-v1` (63 commit), chưa có remote. `main` local chỉ là commit `a3407a3` (import tài liệu và corpus raw, **chưa có workflow**). Plan viết `main` vì plan có trước nhánh này.
-- Chưa có: `vercel.json`, `scripts/smoke_llm.py`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
+- Chưa có: `vercel.json`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
 - Có sẵn: `kaggle/serve.ipynb` (sinh từ `kaggle/build_notebook.py`), `kaggle/build_llamacpp.ipynb` (spike 0.2, đã viết, chưa chạy), `docs/spikes.md` (khung, chưa có số), `docs/runbook-kaggle.md`, `docs/deploy.md`, `docs/ci.md`, `docs/runbook-eval.md`, `docs/runbook-observability.md`, 4 migration trong `supabase/migrations/`.
 
 ## Thứ tự và thời gian ước tính
@@ -154,12 +154,12 @@ Làm theo [runbook-kaggle.md](runbook-kaggle.md) mục "Thiết lập một lầ
 
 ### C3. Smoke và benchmark (Task 2.3)
 
-`scripts/smoke_llm.py` **chưa tồn tại** (Task 2.3 bị hoãn tới lúc có gateway sống). Với notebook đang READY, nhắn trợ lý: **"bắt đầu Task 2.3"**. Sau khi trợ lý viết xong, chạy trên máy bạn:
+`scripts/smoke_llm.py` đã viết (chưa chạy với gateway live). Với notebook đang READY, chạy trên máy bạn:
 
 ```bash
 export LLM_BASE_URL=https://<NGROK_DOMAIN>
 export LLM_API_KEY=<GATEWAY_API_KEY>     # chỉ trong shell này
-python scripts/smoke_llm.py
+python scripts/smoke_llm.py              # PowerShell: $env:LLM_BASE_URL="..."; $env:LLM_API_KEY="..."
 ```
 
 Script kiểm: `/health` có `llm` true, embed 2 câu ra 1024 chiều, rerank đúng thứ tự, chat stream 3 lần đo TTFT và tok/s. **Đạt** khi TTFT p50 < 3 s qua tunnel và câu trả lời tiếng Việt có dấu đúng.
@@ -169,7 +169,7 @@ Việc nhỏ trong phiên này (ledger Task 4.1): đo thật số ký tự trên
 **Gửi lại cho trợ lý** (task 2.2, 2.3):
 
 - Thời gian từ Run All tới `READY` (phút), có dùng dataset không.
-- Dòng output của smoke (không chứa key): tg tok/s, **TTFT p50** (s), kết quả embed 1024 chiều, rerank đúng/sai.
+- Nguyên khối `=== RESULT smoke_llm ===` do script in (không chứa key, host đã che nhãn đầu): gồm TTFT p50/p95, tok/s, embed 1024 chiều, thứ tự rerank, đoạn đầu câu trả lời. Chi tiết và cách đọc: [spikes.md#bench](spikes.md#bench).
 - Ảnh chụp cell 8 (che URL nếu muốn; domain ngrok không phải bí mật nhưng đừng công khai URL tunnel).
 
 **Giữ notebook bật nếu sắp làm tiếp Giai đoạn F** (ingest cần embedding). Không thì Stop session.
@@ -477,7 +477,7 @@ Nếu gate vẫn xanh: stopword không đủ ảnh hưởng, hỏi trợ lý đ�
 | 0.2 | C1 | pp/tg tok/s, cờ `llama-server`, tên dataset | viết `docs/spikes.md#llama`, tick |
 | 0.3 | C1 | số event/150, bị cắt/dồn cục, 401 không token | ghi spikes, tick (hoặc đề xuất đường thay) |
 | 2.2 | C2 | thời gian tới `READY`, ảnh cell 8 | tick 2.2 |
-| 2.3 | C3 | output `smoke_llm.py`: tg tok/s, TTFT p50 | viết script, ghi `spikes.md#bench`, tick |
+| 2.3 | C3 | khối `RESULT smoke_llm` (TTFT p50, tok/s) | ghi `spikes.md#bench`, tick |
 | 0.5 | D | `extversion`, thời gian `select 1`, tên migration, `app_config` | ghi spikes, tick; khớp `UP_TO_DATE` |
 | 0.4 | E | kết quả `/`, `/api/ping`, `/api/sse`, path `/api`, header AI SDK, `--prebuilt` | viết `vercel.json`, spikes, ADR hoặc phương án dự phòng, cron 6.5 |
 | 1.2 (ND145) | F1 | tình trạng vbpl.vn, có/không văn bản sửa đổi | sửa `legal_docs.yaml` |

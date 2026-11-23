@@ -8,7 +8,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 | [#sse](#sse) | 0.3 | code đã viết (`kaggle/spike_sse.py`, `scripts/spike_sse_check.py`), chưa chạy trên Kaggle |
 | [#vercel](#vercel) | 0.4 | code đã viết (`vercel.json`, `backend/app/api/spike.py`, `spike-deploy.yml`, `scripts/spike_vercel_check.py`), chưa chạy với project Vercel thật |
 | [#supabase](#supabase) | 0.5 | chưa chạy |
-| [#bench](#bench) | 2.3 | chưa chạy |
+| [#bench](#bench) | 2.3 | code đã viết (`scripts/smoke_llm.py`), chưa chạy với gateway live |
 
 ---
 
@@ -339,6 +339,72 @@ Tiêu chí đạt (plan Task 0.5): ghi `extversion` của `vector` (>= 0.8.0 th�
 
 ## bench: smoke và benchmark LLM qua tunnel, Task 2.3
 
-**Trạng thái: chưa chạy.** Kết quả: TBD — chờ gateway live qua tunnel (`scripts/smoke_llm.py` chưa viết).
+**Trạng thái: code đã viết (`scripts/smoke_llm.py`, test `pipelines/tests/test_smoke_llm.py` với gateway giả), chưa chạy với gateway live.** Mọi số bên dưới còn `TBD — chờ chạy`.
 
-Tiêu chí đạt (plan Task 2.3): **TTFT p50 < 3 s** qua tunnel (3 lần chat stream) và câu trả lời là tiếng Việt có dấu đúng; embed 2 câu ra 1024 chiều; rerank "lương tối thiểu vùng I" xếp đoạn liên quan lên đầu. Ghi cả tok/s.
+**Mục đích.** Từ máy bạn, qua tunnel ngrok thật, kiểm gateway Kaggle đủ dùng: `/health` báo LLM sẵn sàng; embed ra 1024 chiều; rerank xếp đúng đoạn lên đầu; chat stream tiếng Việt có dấu đúng, đo TTFT và tok/s. Script chỉ dùng thư viện chuẩn, không ghi file, không in key (host bị che nhãn đầu).
+
+### Cách chạy
+
+Notebook `kaggle/serve.ipynb` phải **READY** trước (cell 8 in `READY https://<domain>`, xem [runbook-kaggle.md](runbook-kaggle.md)). Đặt key trong shell, đừng dán vào chat.
+
+```bash
+# Git Bash
+export LLM_BASE_URL=https://<NGROK_DOMAIN>
+export LLM_API_KEY=<GATEWAY_API_KEY>
+python scripts/smoke_llm.py            # tùy chọn: --runs 3 (mặc định), --timeout 60
+```
+
+```powershell
+# PowerShell
+$env:LLM_BASE_URL="https://<NGROK_DOMAIN>"
+$env:LLM_API_KEY="<GATEWAY_API_KEY>"
+python scripts/smoke_llm.py
+```
+
+Mã thoát: 0 PASS, 1 FAIL, 2 lỗi dùng, kết nối hoặc 401. Mất khoảng 1 đến 2 phút. Script in từng bước `[a_health]`... rồi khối `=== RESULT smoke_llm ===` (bảng markdown theo từng lần chat, p50/p95 TTFT, tok/s, cosine, thứ tự rerank, 200 ký tự đầu của câu trả lời lần 1, thời điểm UTC): dán **nguyên khối** đó vào chat và vào bảng dưới. `LLM_BASE_URL` không khớp regex ngrok của backend thì script chỉ cảnh báo (backend sẽ coi gateway là offline).
+
+Các bước và cách đo:
+
+| Bước | Kiểm | Nguồn field |
+|---|---|---|
+| a. `GET /health` (không cần token) | `llm` là true; in `status`, `embedder`, `reranker`, `model` | `kaggle/gateway.py` `health()` |
+| b. `POST /v1/embeddings` hai câu | đúng 2 vector, mỗi vector **1024** chiều, số hữu hạn, hai vector khác nhau; in cosine; gọi hai lần để lấy thời gian lần đầu và lần lặp | `data[].index/embedding` |
+| c. `POST /v1/rerank` truy vấn "lương tối thiểu vùng I" với 3 đoạn (nấu ăn, lương tối thiểu vùng, thai sản) | đoạn lương tối thiểu xếp **đầu**, điểm trong [0, 1] (đã qua sigmoid) và giảm dần | `results[].index/relevance_score` |
+| d. `POST /v1/chat/completions` stream, `max_tokens=128`, system+user, không gửi tham số thinking (thinking tắt ở cờ `llama-server`, giống backend) | SSE đủ tới `[DONE]`; câu trả lời không rỗng, có dấu tiếng Việt, không U+FFFD, không mojibake, không `<think>` hay `reasoning_content`; ghi NFC hay không | SSE `choices[0].delta.content` |
+| e. Kết luận | TTFT p50 < `TTFT_P50_MAX_S = 3.0` s | |
+
+Công thức: **TTFT** = từ lúc gửi request (gồm bắt tay TCP/TLS qua ngrok) tới delta nội dung không rỗng đầu tiên. **tok/s** = số token / (tổng thời gian - TTFT), tức tốc độ decode. Số token lấy từ `usage.completion_tokens` nếu stream có (script gửi `stream_options.include_usage`); không có thì đếm số chunk nội dung và cột "nguồn token" ghi "xấp xỉ theo số chunk". p50/p95 nội suy tuyến tính. tok/s **không gate**, chỉ cảnh báo nếu median < 10. Script gửi thêm `stream_options` so với backend (backend không gửi): chỉ để lấy `usage`.
+
+### Tiêu chí đạt (plan Task 2.3)
+
+- **TTFT p50 < 3 s** qua tunnel (3 lần chat stream).
+- Câu trả lời là **tiếng Việt có dấu đúng** (các kiểm tra ở bước d).
+- Embed 1024 chiều, rerank đúng thứ tự, `/health` có `llm` true.
+- Ghi cả tok/s (chỉ để biết). Ngưỡng là hằng số đặt tên ở đầu `scripts/smoke_llm.py`: nếu bạn thấy ngưỡng sai, nói trước khi sửa, đừng nới ngưỡng để "đạt".
+
+### Kết quả (điền từ khối `RESULT`)
+
+| Trường | Giá trị |
+|---|---|
+| Ngày chạy (UTC) | TBD — chờ chạy |
+| `verdict` | TBD — chờ chạy |
+| `health` (status, llm, embedder, reranker, model) | TBD — chờ chạy |
+| Embeddings: chiều, cosine, ms lần đầu / lần lặp | TBD — chờ chạy |
+| Rerank: thứ tự, điểm | TBD — chờ chạy |
+| TTFT từng lần (s) | TBD — chờ chạy |
+| TTFT p50 / p95 (s) | TBD — chờ chạy |
+| tok/s từng lần và median, nguồn token (usage hay xấp xỉ) | TBD — chờ chạy |
+| 200 ký tự đầu của câu trả lời lần 1, có dấu đúng? NFC? | TBD — chờ chạy |
+| Cấu hình lúc đo (quant Q5_K_M hay Q4_K_M, `-ngl`, `-c`, vùng ngrok) | TBD — chờ chạy |
+
+### Nếu lỗi
+
+- **Thoát mã 2, "401 unauthorized"**: `LLM_API_KEY` không trùng secret `GATEWAY_API_KEY` trong Kaggle (hoặc secret chưa tick "Attached" khi notebook chạy). Kiểm shell có đúng key, không có dấu cách hay xuống dòng thừa.
+- **Thoát mã 2, "không kết nối được"**: notebook chưa READY, đã hết phiên, sai domain, hoặc mất mạng.
+- **`a_health` FAIL `llm=False`**: llama-server chưa tải xong model hoặc đã chết; xem log cell serve (runbook).
+- **HTTP 502/504 (kèm `ngrok ERR_NGROK_...` nếu có)**: gateway hoặc llama-server chưa sẵn sàng, hoặc tunnel đang đứt. Chờ vài chục giây rồi chạy lại một lần.
+- **"phản hồi không phải JSON" hoặc content-type `text/html`**: trang cảnh báo ngrok hoặc URL sai (xem phần ngrok ở mục [sse](#sse)).
+- **TTFT p50 >= 3 s**: xem cell serve có đẩy đủ lớp lên GPU không (`-ngl`) và `CUDA_VISIBLE_DEVICES` (llama-server GPU 0, embedder/reranker GPU 1, tranh GPU làm chậm); prompt dài hơn dự kiến; vùng ngrok xa Việt Nam; lần đầu sau khi khởi động có thể chậm hơn, chạy lại để so. Ghi số thật, không nới ngưỡng.
+- **Chiều embedding khác 1024**: sai model embedder (phải là `AITeamVN/Vietnamese_Embedding`).
+- **Thiếu dấu, `<think>`, U+FFFD, mojibake**: kiểm cờ `--reasoning-budget 0` và `--chat-template-kwargs` (mục [llama](#llama)), template Jinja, và mã hóa ở tunnel.
+- **Luồng bị cắt / không có `[DONE]`**: liên quan spike [sse](#sse); ghi lại lần thứ mấy và sau bao lâu.

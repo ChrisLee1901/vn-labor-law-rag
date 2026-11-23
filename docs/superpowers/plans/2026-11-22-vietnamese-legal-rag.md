@@ -346,7 +346,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** Create `scripts/smoke_llm.py` (chạy local, đọc `LLM_BASE_URL`, `LLM_API_KEY` từ env).
 
-- [ ] Script kiểm tra: `/health` có `llm` true; embed 2 câu tiếng Việt ra 1024 chiều; rerank câu "lương tối thiểu vùng I" xếp đoạn liên quan lên đầu; chat stream một câu tiếng Việt, đo TTFT và tok/s trên 3 lần. — *chờ live batch: chưa viết scripts/smoke_llm.py, hoãn sang live batch (R19)*
+- [ ] Script kiểm tra: `/health` có `llm` true; embed 2 câu tiếng Việt ra 1024 chiều; rerank câu "lương tối thiểu vùng I" xếp đoạn liên quan lên đầu; chat stream một câu tiếng Việt, đo TTFT và tok/s trên 3 lần. — *code đã viết: scripts/smoke_llm.py (+ test); chờ chạy với gateway live*
 - [ ] Ghi số đo vào `docs/spikes.md#bench`. **Đạt** khi TTFT p50 < 3 s qua tunnel và câu trả lời là tiếng Việt có dấu đúng. — *chờ live batch: cần gateway live qua tunnel*
 - [ ] Commit `chore: LLM smoke and benchmark script`. — *chờ live batch: chưa làm, hoãn sang live batch (R19)*
 
