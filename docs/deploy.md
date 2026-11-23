@@ -2,7 +2,7 @@
 
 Workflow: `.github/workflows/deploy.yml` (tái sử dụng, `on: workflow_call`), do `ci.yml` gọi bằng hai job `deploy-preview` và `deploy-prod`. Cả hai `needs: ci-ok` và **không** nằm trong `needs` của `ci-ok`. Deploy bằng Vercel CLI (`vercel pull` / `build` / `deploy --prebuilt`) từ Actions; Vercel Git integration tắt.
 
-> **CHƯA XÁC MINH.** Repo chưa có remote, chưa có project Vercel hay Supabase. Workflow mới qua actionlint, chưa chạy lần nào trên GitHub. Hai điểm mở nhất: (1) `--prebuilt` có hỗ trợ Vercel Services hay không (spike Task 0.4, chưa có `vercel.json` trong repo); (2) định dạng đầu ra `supabase db push --dry-run` mà `scripts/migration_guard.py` đọc. Mục "Phương án dự phòng" bên dưới là lối thoát cho (1).
+> **CHƯA XÁC MINH.** Repo chưa có remote, chưa có project Vercel hay Supabase. Workflow mới qua actionlint, chưa chạy lần nào trên GitHub. Hai điểm mở nhất: (1) `--prebuilt` có hỗ trợ Vercel Services hay không (spike Task 0.4: `vercel.json` đã có, `docs/spikes.md#vercel` ghi cách chạy, chưa chạy lần nào); (2) định dạng đầu ra `supabase db push --dry-run` mà `scripts/migration_guard.py` đọc. Mục "Phương án dự phòng" bên dưới là lối thoát cho (1).
 
 ## Job nào chạy khi nào
 
@@ -87,14 +87,14 @@ Trang `/van-ban*` gọi API từ server (`frontend/src/lib/api-server.ts`): `API
 7. Lần đầu: nếu project Supabase đã có bảng tạo tay trước khi dùng CLI thì `supabase db push` sẽ đụng, khi đó dùng `supabase migration repair` cho các migration đã áp. Merge một PR vào `main` và xem job `migrate` + `deploy`.
 8. Kiểm tra cuối (chưa làm, cần live batch): merge một PR -> production cập nhật, `/api/health` trả `db: "ok"`.
 9. Keep-alive (Task 6.5): thêm secret repo `CRON_SECRET` (cùng giá trị với biến Vercel `CRON_SECRET`) và đặt biến repository `PROD_URL` (phải là `https://...`, không có đường dẫn). Chạy tay `keepalive` bằng Actions, Run workflow, phải xanh.
-10. Khi Task 0.4 tạo `vercel.json`, thêm cron Vercel (mục Keep-alive bên dưới).
+10. Sau khi spike Task 0.4 đạt, thêm cron Vercel vào `vercel.json` (mục Keep-alive bên dưới); `vercel.json` đã có nhưng chưa có `crons`.
 
 ## Keep-alive Supabase (Task 6.5)
 
 Supabase free pause project sau 7 ngày không hoạt động. `GET /api/cron/keepalive` (backend/app/api/cron.py) trả **204** khi `Authorization: Bearer $CRON_SECRET` đúng, **401** khi sai hoặc thiếu; bên trong chạy `select 1` qua pooler, tính là hoạt động DB. Hai cơ chế:
 
 1. **Chính: GitHub schedule** `.github/workflows/keepalive.yml`, `cron: "0 2 */3 * *"` (mỗi 3 ngày, UTC) và `workflow_dispatch`. `curl --proto '=https'` (không `-f`, không `-L`) rồi kiểm mã HTTP **đúng 204**: 2xx khác, redirect (308 của `http://`) hay 401 đều đỏ, bearer token không bao giờ bị theo redirect hay gửi qua http. Secret và `PROD_URL` chỉ qua `env:`. Thiếu `CRON_SECRET`, thiếu `PROD_URL` hoặc `PROD_URL` không bắt đầu bằng `https://` thì job **đỏ** kèm thông báo (bỏ qua im lặng thì Supabase bị pause mà không ai biết). `PROD_URL` là URL https gốc, không có đường dẫn (dấu `/` cuối được cắt). Hệ quả: repo mới chưa cấu hình sẽ đỏ theo lịch cho đến khi làm checklist mục 9.
-2. **Phụ: Vercel Cron** hằng ngày. Thêm vào `vercel.json` khi Task 0.4 tạo file này (chưa có file nên chưa thêm, tránh tạo `vercel.json` một phần làm lệch cấu hình Services):
+2. **Phụ: Vercel Cron** hằng ngày. `vercel.json` đã có (Task 0.4) nhưng **chưa** có `crons`: tài liệu Vercel không nói cron cấp cao nhất có chạy với Services hay không. Thêm vào `vercel.json` sau khi spike đạt (cấp cao nhất, cạnh `services`):
    ```json
    {"crons":[{"path":"/api/cron/keepalive","schedule":"0 3 * * *"}]}
    ```

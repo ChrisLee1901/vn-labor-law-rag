@@ -221,19 +221,19 @@ Chưa cần Kaggle.
 
 Đây là điểm rủi ro lớn nhất, **chưa xác minh**: Vercel Services có chạy với `vercel build` + `vercel deploy --prebuilt` hay không. Kết quả quyết định cả `deploy.yml`. Cũng chưa xác minh: tên field AI SDK v7 cho `source-url`, `data-*`, `error` và header `x-vercel-ai-ui-message-stream` (docs/ai-sdk-protocol.md đã ghi phần đã kiểm).
 
-Frontend (`frontend/`) và backend (`backend/app/main.py`, có `/api/health`) **đã tồn tại**, plan 0.4 giả định chỉ có bản "hello"; spike sẽ dùng bản thật. Nhắn trợ lý: **"bắt đầu Task 0.4"**: trợ lý viết `vercel.json` (2 service `web` root `frontend` và `api` root `backend` entrypoint `app.main:app`, rewrite `/api/(.*)`, `"git": {"deploymentEnabled": false}`), endpoint `/api/ping` và `/api/sse` (30 event) tạm thời, và `.github/workflows/spike-deploy.yml`.
+Frontend (`frontend/`) và backend (`backend/app/main.py`, có `/api/health`) **đã tồn tại**, plan 0.4 giả định chỉ có bản "hello"; spike sẽ dùng bản thật. Code đã viết: `vercel.json` (2 service `web` root `frontend` và `api` root `backend` entrypoint `app.main:app`, rewrite `/api/(.*)`, `"git": {"deploymentEnabled": false}`), endpoint `/api/ping` và `/api/sse` (30 event) tạm thời trong `backend/app/api/spike.py` (chỉ bật khi `ENABLE_SPIKE_ENDPOINTS=1`), `.github/workflows/spike-deploy.yml` và checker `scripts/spike_vercel_check.py`. Quy trình chi tiết: [spikes.md](spikes.md#vercel).
 
 Phần bạn làm:
 
 1. `npm i -g vercel` rồi `vercel login`. Trong thư mục repo: `vercel link` (tạo project mới). Lệnh này tạo `.vercel/project.json` (đã trong `.gitignore`) chứa `orgId` và `projectId` (không bí mật, nhưng chỉ cần cho GitHub Secrets).
 2. Thêm GitHub Secrets cấp repo: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (Settings, Secrets and variables, Actions).
-3. Đặt tối thiểu env Vercel cho Preview (Project, Settings, Environment Variables): `DATABASE_URL`, `LLM_BASE_URL`, `LLM_API_KEY` (spike `/api/ping` cần DB).
-4. Chạy spike. Cách chuẩn là workflow `spike-deploy` (`vercel pull --yes --environment=preview` -> `vercel build` -> `vercel deploy --prebuilt`). Chạy `vercel build` trên Windows với service Python **chưa xác minh**; nếu lỗi thì chạy bằng workflow (Linux) hoặc WSL.
-5. Mở URL preview (Deployment Protection có thể chặn bằng trang đăng nhập; tạm dùng trình duyệt đã đăng nhập Vercel, hoặc tạo bypass ở bước G):
+3. Không cần đặt env Vercel nào cho spike (`/api/ping` chưa gọi DB, đó là việc của Task 0.5; workflow tự truyền `ENABLE_SPIKE_ENDPOINTS=1`). Tùy chọn: tạo Protection Bypass for Automation (Deployment Protection) và `export VERCEL_AUTOMATION_BYPASS_SECRET=...` trên máy bạn.
+4. Đẩy nhánh lên GitHub rồi chạy workflow `spike-deploy` (tab Actions, Run workflow; `vercel pull --yes --environment=preview` -> `vercel build` -> `vercel deploy --prebuilt`). URL preview nằm ở job summary. Chạy `vercel build` trên Windows với service Python **chưa xác minh**; nếu cần thì dùng workflow (Linux) hoặc WSL.
+5. Chạy checker trên máy bạn: `python scripts/spike_vercel_check.py --url https://<preview>.vercel.app --bypass-env VERCEL_AUTOMATION_BYPASS_SECRET` (bỏ `--bypass-env` nếu không bật Protection). Dán nguyên khối `=== RESULT spike_vercel ===`. Nó kiểm các mục sau (xem tay nếu muốn: `curl -N` thêm `-H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET"` khi có Protection):
    - `/` hiển thị trang Next.js.
-   - `curl -N https://<preview>/api/ping` trả `{"ok": true}` (kèm `select 1` tới DB).
+   - `/api/ping` trả `{"ok": true, ...}` kèm `path`, `root_path`, `raw_path`, `vercel_region` (chưa có `select 1`, việc của Task 0.5).
    - `curl -N https://<preview>/api/sse` nhận từng event cách nhau ~1 giây (không dồn cục).
-   - Ghi: FastAPI nhận path **có** `/api` hay đã bị cắt; vị trí đặt `maxDuration`; region `sin1` có nhận không; header `x-vercel-ai-ui-message-stream` có đi qua không.
+   - Checker in: FastAPI nhận path **có** `/api` hay đã bị cắt, region của function so với `sin1`. Tự ghi thêm từ dashboard (Deployment, Functions): `maxDuration` và region hiển thị. Header `x-vercel-ai-ui-message-stream` không kiểm ở spike này (`/api/chat` cần DB và LLM): kiểm ở lần deploy thật đầu tiên.
 6. Nếu `--prebuilt` không hỗ trợ Services: dùng phương án dự phòng (Vercel Git integration) trong [deploy.md](deploy.md) mục "Phương án dự phòng". Trợ lý sẽ ghi ADR và sửa `ci.yml`, `deploy.yml`.
 
 **Dấu hiệu thành công:** ba mục `/`, `/api/ping`, `/api/sse` đạt trên URL preview, và `vercel deploy --prebuilt` không báo lỗi Services.
@@ -244,8 +244,8 @@ Phần bạn làm:
 
 - Kết quả từng URL: `/` có render không; `/api/ping` nội dung; `/api/sse` có stream từng event không (số event và có dồn cục không).
 - FastAPI thấy path có `/api` hay không; `maxDuration` đặt chỗ nào; region `sin1` nhận hay không.
-- Header `x-vercel-ai-ui-message-stream` có tới trình duyệt không (`curl -I`).
-- Thời gian `select 1` từ function Vercel (lần nóng).
+- Header `x-vercel-ai-ui-message-stream`: để lần deploy thật đầu tiên (không thuộc spike này).
+- Thời gian `select 1` từ function Vercel (lần nóng): thuộc Task 0.5, chưa có trong `/api/ping` của spike này.
 - `--prebuilt` hỗ trợ Services: có/không, kèm thông báo lỗi (nếu có).
 - Link run Actions (công khai nếu repo public) hoặc 20 dòng cuối log khi lỗi.
 - Xác nhận đã thêm 3 secret `VERCEL_*` (có/không), không gửi giá trị.

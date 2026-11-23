@@ -141,7 +141,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** Create `vercel.json`, `frontend/` (create-next-app tối thiểu), `backend/app/main.py` (hello), `.github/workflows/spike-deploy.yml` (xóa sau spike).
 
-- [ ] `vercel.json` khai báo 2 service: `web` (root `frontend`) và `api` (root `backend`, entrypoint `app.main:app`). Rewrite `/api/(.*)` sang `api`, phần còn lại sang `web`. Đặt `"git": {"deploymentEnabled": false}`. Tra cú pháp chính xác ở docs Vercel Services tại thời điểm làm. — *chờ live batch: spike Vercel Services chưa làm, chưa có vercel.json*
+- [ ] `vercel.json` khai báo 2 service: `web` (root `frontend`) và `api` (root `backend`, entrypoint `app.main:app`). Rewrite `/api/(.*)` sang `api`, phần còn lại sang `web`. Đặt `"git": {"deploymentEnabled": false}`. Tra cú pháp chính xác ở docs Vercel Services tại thời điểm làm. — *chờ live batch: spike Vercel Services chưa làm, chưa có vercel.json* — *code đã viết: vercel.json, backend/app/api/spike.py (ENABLE_SPIKE_ENDPOINTS), spike-deploy.yml, scripts/spike_vercel_check.py; chờ chạy với project Vercel thật*
 - [ ] FastAPI: `GET /api/ping` trả `{"ok": true}`, và `GET /api/sse` stream 30 event mỗi 1 giây. — *chờ live batch: spike Vercel Services chưa làm*
 - [ ] `[USER]` Tạo project Vercel, lấy `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` và đưa vào GitHub Secrets. — *chờ [USER]*
 - [ ] Workflow chạy `vercel pull --yes --environment=preview`, rồi `vercel build`, rồi `vercel deploy --prebuilt`. — *chờ live batch: cần project Vercel thật*

@@ -6,7 +6,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 |---|---|---|
 | [#llama](#llama) | 0.2 | notebook đã viết, chưa chạy trên Kaggle |
 | [#sse](#sse) | 0.3 | code đã viết (`kaggle/spike_sse.py`, `scripts/spike_sse_check.py`), chưa chạy trên Kaggle |
-| [#vercel](#vercel) | 0.4 | chưa chạy |
+| [#vercel](#vercel) | 0.4 | code đã viết (`vercel.json`, `backend/app/api/spike.py`, `spike-deploy.yml`, `scripts/spike_vercel_check.py`), chưa chạy với project Vercel thật |
 | [#supabase](#supabase) | 0.5 | chưa chạy |
 | [#bench](#bench) | 2.3 | chưa chạy |
 
@@ -201,9 +201,126 @@ Checker in `PASS` khi **tất cả** đúng:
 
 ## vercel: Vercel Services + deploy từ Actions, Task 0.4
 
-**Trạng thái: chưa chạy.** Kết quả: TBD — chờ chạy (cần project Vercel thật).
+**Trạng thái: code đã viết, chưa chạy trên Vercel.** Máy viết code không có tài khoản hay project Vercel, nên mọi dòng "Kết quả" bên dưới còn `TBD — chờ chạy`. Đã chạy cục bộ: test backend (`backend/tests/api/test_spike.py`), test checker (`pipelines/tests/test_spike_vercel_check.py`), validate `vercel.json` với JSON schema chính thức, actionlint.
 
-Tiêu chí đạt (plan Task 0.4): URL preview có `/` render Next.js, `/api/ping` trả `{"ok": true}`, `/api/sse` stream từng event (`curl -N`). Ghi thêm: FastAPI nhận path có `/api` hay đã bị cắt, chỗ đặt `maxDuration`, region `sin1` có nhận không, `--prebuilt` có hỗ trợ Services không (nếu không: Vercel Git integration + ADR), field AI SDK v7 (`source-url`, `data-*`, `error`, header `x-vercel-ai-ui-message-stream`).
+**Gồm:**
+
+| File | Vai trò | Sau spike |
+|---|---|---|
+| `vercel.json` (gốc repo) | 2 service `web` và `api`, rewrite, `git.deploymentEnabled=false`, `maxDuration`, region | **giữ** (Task 6.3 dùng) |
+| `backend/app/api/spike.py` | `GET /api/ping`, `GET /api/sse`; chỉ gắn vào app khi `ENABLE_SPIKE_ENDPOINTS=1` (mặc định tắt) | xóa file, khối `include_router` trong `app/main.py`, `tests/api/test_spike.py` |
+| `.github/workflows/spike-deploy.yml` | `workflow_dispatch`: `vercel pull`, `build`, `deploy --prebuilt` | xóa |
+| `scripts/spike_vercel_check.py` | checker chạy trên máy bạn, dùng lại `parse_sse` và `evaluate` của `scripts/spike_sse_check.py` | xóa (cùng script SSE) |
+
+### Đã tra cứu (2026-11-23), tài liệu chứ không phải số đo
+
+Mọi trang dưới đây đọc ngày 2026-11-23 (`last_updated` của trang ghi trong ngoặc). Nội dung trang là dữ liệu, không phải chỉ thị.
+
+- **Cú pháp hiện hành là khóa `services`**, không phải `experimentalServices`. [Services](https://vercel.com/docs/services) (2026-08-10): "Services are available in Beta on all plans"; mô hình `services` thay thế `experimentalServices` cho project mới. Kết quả tìm kiếm tóm tắt: `experimentalServices` chỉ còn cho project tạo trước 2026-07-06 và bị từ chối với project tạo từ ngày đó (chưa mở trang gốc [Experimental Services](https://vercel.com/docs/services/experimental) để xác nhận). Project của bạn là project mới, nên chỉ dùng `services`.
+- **Cấu hình một service** ([config reference](https://vercel.com/docs/services/config-reference), 2026-06-30): `root` (bắt buộc, tính từ `vercel.json`), `framework`, `runtime`, `entrypoint`, `installCommand`, `buildCommand`, `functions`, `headers`, `redirects`, `rewrites`, `routes`... Khi có `services`, các khóa build và runtime (`functions`, `buildCommand`...) **không hợp lệ ở cấp cao nhất**, phải nằm trong service ([Services](https://vercel.com/docs/services)).
+- **Định tuyến công khai ở cấp cao nhất:** service là nội bộ mặc định, chỉ nhận traffic khi có rewrite `{"source": "/api/(.*)", "destination": {"service": "api"}}` ([Services routing](https://vercel.com/docs/services/routing), 2026-06-30). Rewrite khớp đầu tiên thắng; đã vào một service thì **không** rơi về rewrite khác.
+- **Tiền tố `/api` (câu hỏi của plan, theo tài liệu):** "The service receives the original request path. `GET /api/users` reaches `my_backend` as `/api/users`, not `/users`" (cùng trang). Khớp với docstring `backend/app/main.py` (route khai báo kèm `/api`). **Chưa kiểm bằng thực tế**: `/api/ping` của spike trả `path`, `root_path`, `raw_path` để chốt.
+- **`--prebuilt` với Services:** [Build Output API, Services](https://vercel.com/docs/build-output-api/services) (2026-09-15): mỗi service được `vercel build` xuất vào `.vercel/output/services/<name>/` và `config.json` gốc liệt kê chúng. Đó là bằng chứng gián tiếp rằng build cục bộ hiểu Services. Trang [vercel deploy](https://vercel.com/docs/cli/deploy) (2026-11-14) mô tả `--prebuilt` chung chung ("upload and deploy the results of a previous `vc build`"). **Không trang nào nói thẳng "`--prebuilt` hỗ trợ Services"**: đây là điều spike phải trả lời.
+- **Ràng buộc Services** (trang Build Output API): không Middleware trong service, không Edge runtime, tối đa 100 service, tên service chỉ gồm chữ thường, `-`, `_`. Frontend của repo không có `middleware` hay `proxy` (đã kiểm `frontend/` và `frontend/src/`).
+- **FastAPI** ([FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi), 2026-11-14; [Python runtime](https://vercel.com/docs/functions/runtimes/python), 2026-08-12): entrypoint tự nhận gồm `app/main.py` (biến `app`) hoặc `tool.vercel.entrypoint` trong `pyproject.toml`; trong `services`, `entrypoint` là `module:variable` như `app.main:app`. Phụ thuộc: "`pyproject.toml` (with or without a `uv.lock`), `requirements.txt`, or a `Pipfile`", nên **không cần `requirements.txt`** vì `backend/` có `pyproject.toml` và `uv.lock`. Python mặc định 3.12 (khớp `requires-python = ">=3.12,<3.13"`). Bundle chuẩn tối đa 500 MB. Streaming bằng `StreamingResponse` được hỗ trợ.
+- **`maxDuration` và region:** [FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi): cấu hình hàm bằng `functions` trong `vercel.json`, **khóa là file entrypoint đã resolve** (`"app/main.py": {"maxDuration": 60}`). [vercel.json](https://vercel.com/docs/project-configuration/vercel-json): `regions` cấp cao nhất (mặc định `iad1`) hoặc `regions` ngay trong từng mục `functions`. Cách đặt trong service (`services.api.functions`) suy ra từ config reference (`functions` nằm trong service) và JSON schema; **chưa có ví dụ chính thức**, và chưa rõ khóa glob tính từ `root` của service (`app/main.py`) hay từ gốc repo (`backend/app/main.py`).
+- **Cron:** `crons` là khóa cấp cao nhất trong [vercel.json](https://vercel.com/docs/project-configuration/vercel-json) và schema; [Cron Jobs](https://vercel.com/docs/schedules/cron-jobs) (2026-09-16) gọi `GET` vào URL production với `path`, và ghi cron là tính năng cũ sẽ chuyển sang "Schedules". Không trang nào nói cron có chạy ở chế độ Services hay không. **Vì vậy `vercel.json` chưa có `crons`** (xem dưới).
+- **CLI trong CI:** [Global options](https://vercel.com/docs/cli/global-options) (2026-11-14): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` đọc từ env, khuyến nghị cho CI vì không lộ token trong argv. [deploy](https://vercel.com/docs/cli/deploy): stdout của `vercel deploy` là URL deployment; `--env KEY=VALUE` đặt env **lúc chạy**, `--build-env` đặt env lúc build; với `--prebuilt` thì System Environment Variables không có lúc build.
+- **Deployment Protection:** [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) (2026-09-16): header (hoặc query) `x-vercel-protection-bypass: <secret>`; secret cũng có trong env `VERCEL_AUTOMATION_BYPASS_SECRET` của deployment.
+- **`x-vercel-id`:** [Response headers](https://vercel.com/docs/headers/response-headers) (2026-08-11) chỉ nói header chứa danh sách region mà request đi qua cùng region function chạy. **Định dạng chính xác không được tài liệu hóa.** Checker tách theo `::` và lấy các mã dạng `sin1`, **luôn in kèm giá trị gốc**; đọc bằng mắt, đừng tin phần tách.
+- **Dự phòng (không cần nếu spike đạt):** nếu Services không biểu diễn được thì dùng hai project riêng, hoặc Next.js `rewrites` tới Python Function gốc. Tài liệu hiện có Services nên đã chọn Services.
+
+**JSON schema.** Schema chính thức `https://openapi.vercel.sh/vercel.json` (Draft-04, tải 2026-11-23) **có** `services` (đánh dấu `private: true`; mỗi service: `root` bắt buộc, `framework`, `runtime`, `entrypoint`, `functions`, `headers`, `rewrites`...), `rewrites[].destination` dạng `{"service": ...}`, `git.deploymentEnabled`, `crons`, `regions`; `experimentalServices` vẫn còn. `vercel.json` hiện tại **hợp lệ** theo schema (`uv run --no-project --with jsonschema`; đối chứng âm: thêm khóa lạ vào service, hoặc `maxDuration: 0`, đều bị từ chối). Schema **không** kiểm: khóa `functions` trong service tính từ đâu, region có được nhận khi `--prebuilt`, service có build được trên runner, và ngữ nghĩa lúc chạy nói chung.
+
+### Cấu trúc đã chọn
+
+`vercel.json` ở gốc repo (khóa `services`, **không** dùng `experimentalServices`):
+
+- `web`: `root: "frontend/"`, `framework: "nextjs"`.
+- `api`: `root: "backend/"`, `framework: "fastapi"`, `entrypoint: "app.main:app"`, `functions: {"app/main.py": {"maxDuration": 120, "regions": ["sin1"]}}`.
+- `rewrites`: `/api/(.*)` sang service `api`; `/(.*)` sang service `web`.
+- `git.deploymentEnabled: false` (tắt Git integration; deploy từ Actions).
+
+Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastAPI trong một project, một domain; (2) `maxDuration: 120` khớp luật của repo (function dừng ở 120 s): ngân sách tổng `CHAT_BUDGET_S = 100` cộng 20 s dư cho khởi động và đóng stream, vẫn dưới trần 300 s của spec; (3) region `sin1` chỉ đặt cho `api` vì Supabase ở `ap-southeast-1`; không đặt `regions` cấp cao nhất để không đổi chỗ chạy của `web` ngoài ý muốn (hệ quả: các trang Next SSR như `/van-ban` chạy ở region mặc định và gọi API qua URL công khai; đo ở lần chạy thật, đổi nếu chậm); (4) `api` thuần Python, không `torch` (luật 2). Production **không** đặt `API_ORIGIN` (rewrite `/api` của `next.config` chỉ bật khi có biến này hoặc `next dev`); đừng đặt nó cho Preview của spike.
+
+**Chưa có `crons`.** Tài liệu không nói cron cấp cao nhất có chạy với Services hay không, nên không thêm. Snippet và quy trình ở [deploy.md](deploy.md) mục Keep-alive giữ nguyên. Nếu spike đạt: thêm snippet đó, deploy lại và xem Project, Settings, Cron Jobs có hiện job không; không hiện thì chỉ dựa vào GitHub schedule và ghi vào đây.
+
+### Điều chưa xác minh (spike phải trả lời)
+
+1. `vercel build` và `vercel deploy --prebuilt` với Services chạy được trên runner Ubuntu (cần Python hoặc `uv` trên runner?).
+2. `services.api.functions["app/main.py"]` có khớp hàm không (hay phải là `backend/app/main.py`), `maxDuration` và `regions` có được áp (dashboard, Deployment, Functions).
+3. Project có cần Framework Preset "Services" không (một guide của Vercel nhắc `vercel project update --framework services`, trang đó không nói rõ khi nào cần). Nếu `vercel pull` hoặc `build` báo thiếu preset thì chạy lệnh đó hoặc đặt trong Project Settings.
+4. `vercel deploy --env ENABLE_SPIKE_ENDPOINTS=1` có tới runtime của service khi dùng `--prebuilt`. Không tới thì `/api/ping` trả 404 JSON (checker nhận ra: "FastAPI trả lời nhưng không có route"); khi đó đặt biến cho Preview trong dashboard rồi chạy lại.
+5. Định dạng `x-vercel-id` và chỗ nó cho biết region của function.
+6. Cron ở chế độ Services (xem trên).
+
+### Cách chạy (khớp [user-checklist.md](user-checklist.md) giai đoạn E)
+
+1. `npm i -g vercel@66.6.0`, `vercel login`, `vercel link` trong thư mục repo (project mới). Lấy `orgId`, `projectId` từ `.vercel/project.json`.
+2. GitHub, Settings, Secrets and variables, Actions (cấp repo): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. Không dán giá trị vào chat.
+3. Tùy chọn: Vercel, Project, Deployment Protection, tạo Protection Bypass for Automation; trên máy bạn `export VERCEL_AUTOMATION_BYPASS_SECRET=...` (PowerShell: `$env:VERCEL_AUTOMATION_BYPASS_SECRET="..."`). Spike **không cần DB hay LLM**, nên chưa cần đặt env Vercel nào khác.
+4. Đẩy nhánh lên GitHub, tab Actions, `spike-deploy`, **Run workflow**. Workflow chỉ chạy tay. URL preview nằm ở job summary.
+5. Trên máy bạn:
+
+   ```bash
+   python scripts/spike_vercel_check.py --url https://<preview>.vercel.app --bypass-env VERCEL_AUTOMATION_BYPASS_SECRET
+   ```
+
+   Bỏ `--bypass-env` nếu Protection tắt. Mất khoảng 40 giây. Mã thoát: 0 PASS, 1 FAIL, 2 lỗi dùng hoặc kết nối. Secret không bao giờ được in và không bị gửi sang host khác (checker không theo redirect). Dán nguyên khối `=== RESULT spike_vercel ===` vào chat và vào bảng dưới (nhãn đầu của URL đã được che).
+6. Xem tay: `curl -N https://<preview>/api/sse` (thêm `-H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET"` nếu có bảo vệ). Vercel, Project, Deployments, deployment vừa tạo, Functions: ghi **region** và **max duration** của hàm `api`.
+7. Gửi lại: khối RESULT, link run Actions hoặc 20 dòng cuối log khi lỗi, kết quả mục 6, và xác nhận đã thêm 3 secret `VERCEL_*` (có hoặc không).
+
+### Tiêu chí đạt (plan Task 0.4)
+
+Checker in `PASS` khi **tất cả** đúng:
+
+- `/` trả 200 HTML và nhìn giống app Next.js (có `<title>` và marker `__next` hoặc `/_next/`).
+- `/api/ping` trả JSON `ok: true` và FastAPI thấy `path == "/api/ping"`.
+- `/api/sse` trả 200 `text/event-stream`, đủ **30 event** đúng thứ tự, có `event: done`, không dồn cục (cùng ngưỡng spike 0.3: p95 khoảng cách trong [0,5 s; 2 s], không quá 3 event cách nhau dưới 50 ms, khoảng cách dài nhất tối đa 5 s).
+
+Ghi thêm (không làm FAIL): FastAPI nhận path có `/api` hay không (`fastapi_sees_api_prefix`), region của function (`function_region` so với `sin1`, kèm `x_vercel_id_regions`), header `server`, `cache-control`, `x-vercel-cache`, `x-vercel-id`. "Chỗ đặt `maxDuration`" trả lời bằng `vercel.json` (trong service `api`, khóa `functions`) cộng bước 6.
+
+Deployment Protection chặn (401 HTML "Authentication Required", hoặc redirect tới vercel.com): checker dừng sớm, in `protection: BLOCKED` và hướng dẫn dùng `--bypass-env`.
+
+### Kết quả (điền từ khối `RESULT`)
+
+| Trường | Giá trị |
+|---|---|
+| Ngày chạy (UTC) | TBD — chờ chạy |
+| Link run Actions, hoặc lỗi nếu có | TBD — chờ chạy |
+| `vercel build` và `deploy --prebuilt` với Services chạy được? | TBD — chờ chạy |
+| `verdict` | TBD — chờ chạy |
+| `protection` | TBD — chờ chạy |
+| `/`: status, content-type | TBD — chờ chạy |
+| `/api/ping`: status và `ping_facts` (`path`, `root_path`, `raw_path`, `python`) | TBD — chờ chạy |
+| `fastapi_sees_api_prefix` | TBD — chờ chạy |
+| `function_region` (mong đợi `sin1`) và `x_vercel_id_regions` | TBD — chờ chạy |
+| Giá trị thô `x-vercel-id` | TBD — chờ chạy |
+| `/api/sse`: `events` (x/30), `done_event`, `cut` | TBD — chờ chạy |
+| `wall_time_s`, inter-arrival min/median/p95/max, `clumped_events` | TBD — chờ chạy |
+| `server`, `cache-control`, `x-vercel-cache` | TBD — chờ chạy |
+| `maxDuration` và region hiển thị ở dashboard (Functions) | TBD — chờ chạy |
+| `ENABLE_SPIKE_ENDPOINTS` qua `--env` có tới runtime? | TBD — chờ chạy |
+| Cần Framework Preset Services, hoặc Python/uv trên runner? | TBD — chờ chạy |
+
+### Nếu lỗi và cây quyết định
+
+- **`vercel build` báo thiếu Python hoặc `uv`:** thêm `astral-sh/setup-uv` vào `spike-deploy.yml` (về sau cả `deploy.yml`), chạy lại.
+- **`/api/ping` trả 404 HTML (đi vào Next.js):** rewrite hoặc Services không áp. Gửi `vercel.json` và log `vercel build`.
+- **`/api/ping` trả 404 JSON:** FastAPI trả lời nhưng không có route, tức `ENABLE_SPIKE_ENDPOINTS` chưa tới runtime. Đặt biến cho Preview trong dashboard, chạy lại (không phải lỗi Services).
+- **`path` là `/ping` (tiền tố bị cắt):** trái với tài liệu. Ghi lại và báo trước khi sửa route, vì mọi route trong `backend/app/api/*` khai báo `/api/...`.
+- **`/api/sse` dồn cục hoặc bị cắt:** ghi số event và giây bị cắt. Đây là lỗi ảnh hưởng chat, **không tự đổi**, báo lại.
+- **`--prebuilt` không hỗ trợ Services:** chuyển sang Vercel Git integration theo [deploy.md](deploy.md) mục "Phương án dự phòng" (các bước đã ghi ở đó, không lặp lại). Ghi ADR và sửa `ci.yml`, `deploy.yml` chỉ **sau khi bạn báo kết quả**; chưa có ADR nào.
+- **Region không phải `sin1`:** ghi giá trị thật và nơi đã cấu hình (có thể phải đặt `regions` cấp cao nhất); fallback của repo là `iad1`.
+
+### Kiểm tra AI SDK v7 (mục cuối của plan Task 0.4)
+
+- **Đã kiểm ở Task 4.2** (2026-11-22, [ai-sdk-protocol.md](ai-sdk-protocol.md)): hình dạng chunk `start`, `text-*`, `source-url` (`sourceId`, `url`), `data-*` (`data-status`, `data-trace`, `data-citation-warning`), `error` (`errorText`), `finish`, `[DONE]` và header `x-vercel-ai-ui-message-stream: v1`, đối chiếu với tài liệu trực tuyến của AI SDK. Backend phát đúng header này (`backend/app/stream.py`).
+- **Chưa làm, cố ý:** kiểm header và stream thật trên Vercel. `/api/chat` cần DB và LLM nên spike này không dựng bản giả. Bước đó nằm ở lần deploy thật đầu tiên (smoke Task 6.3 và `frontend/e2e/offline.spec.ts`): header `x-vercel-ai-ui-message-stream: v1` của `/api/chat` phải đi qua được proxy Vercel. Còn nằm trong mục "Unverified" của ai-sdk-protocol.md: `title` trên `source-url`, `transient`, hành vi `useChat` thật.
+
+### Dọn sau spike
+
+Xóa `.github/workflows/spike-deploy.yml`, `backend/app/api/spike.py`, `backend/tests/api/test_spike.py`, khối gắn trong `backend/app/main.py`, `scripts/spike_vercel_check.py`, `pipelines/tests/test_spike_vercel_check.py` (và các file SSE của spike 0.3). **Giữ `vercel.json`.** Rồi: thêm cron vào `vercel.json` nếu được, tick plan Task 0.4 và 6.5, sửa mục "CHƯA XÁC MINH" của `deploy.md`.
 
 ---
 
