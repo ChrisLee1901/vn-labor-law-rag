@@ -238,7 +238,7 @@ Phần bạn làm:
 
 **Dấu hiệu thành công:** ba mục `/`, `/api/ping`, `/api/sse` đạt trên URL preview, và `vercel deploy --prebuilt` không báo lỗi Services.
 
-**Nếu lỗi:** `vercel build` thiếu Python hoặc `uv`: thêm `astral-sh/setup-uv` vào job (đã dự đoán trong deploy.md). `/api/*` trả 404 hoặc vào nhầm Next.js: sai rewrite, gửi `vercel.json` và log `vercel build`. `/api/sse` dồn cục: ghi lại, đây là lỗi ảnh hưởng chat; không tự đổi.
+**Nếu lỗi:** `vercel build` thiếu Python hoặc `uv`: thêm `astral-sh/setup-uv` vào job (đã dự đoán trong deploy.md). `/api/*` trả 404 hoặc vào nhầm Next.js: sai rewrite, gửi `vercel.json` và log `vercel build`. `/api/sse` dồn cục: ghi lại, đây là lỗi ảnh hưởng chat; không tự đổi. Checker báo `/api/ping returned HTTP 404 JSON: FastAPI answered but the route is absent, so ENABLE_SPIKE_ENDPOINTS=1 did not reach the function` (cờ chưa tới runtime; việc workflow "tự truyền" biến này qua `--env` + `--prebuilt` + Services là **chưa xác minh**): đặt `ENABLE_SPIKE_ENDPOINTS=1` cho môi trường Preview trong Vercel (Project, Settings, Environment Variables) rồi chạy lại workflow (xem [spikes.md](spikes.md#vercel), mục "Điều chưa xác minh" số 4). Deploy lỗi vì số region: Hobby chỉ cho 1 region, đặt Project, Settings, Functions, Function Region = `sin1` cho cả project và xóa `regions` khỏi `functions` trong `vercel.json`; thử cả hai biến thể trong cùng một lần spike và báo biến thể nào chạy được.
 
 **Gửi lại cho trợ lý** (task 0.4, 0.5, 6.5 cron, một phần 6.3):
 

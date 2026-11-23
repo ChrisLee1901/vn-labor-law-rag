@@ -110,6 +110,7 @@ Vercel, Project, Firewall, Custom Rules: một rule, điều kiện Request Path
 
 - **`statement_timeout`:** backend chưa đặt timeout cho câu SQL. Pooler Supabase ở transaction mode (6543) có thể không nhận startup option (`options=-c statement_timeout=...`). Hướng sửa khi cần: `SET LOCAL statement_timeout` trong mỗi transaction. Hiện chấp nhận: ngân sách `/api/chat` 100 s và `maxDuration` 120 s của function đã chặn trần. Chưa đổi code ở task này.
 - **`vercel build` chạy cục bộ trên runner** với service Python có thể cần Python hoặc `uv` trên runner (ubuntu-latest có Python 3.12). Nếu build báo thiếu, thêm `astral-sh/setup-uv` vào job `preview` và `deploy`.
+- **Region (Hobby chỉ 1 region, chưa xác minh):** `vercel.json` ghim `sin1` cho service `api` trong khi `web` ở region mặc định; deploy có thể lỗi vì số region. Cách xử lý (đặt Function Region ở cấp project, bỏ `regions` khỏi `functions`) ở `docs/spikes.md#vercel`, cây quyết định.
 - Preview nào cũng chạy khi PR cùng repo xanh, kể cả PR chỉ sửa tài liệu (không lọc theo path), tốn quota deploy của Vercel.
 
 ## Thất bại và rollback

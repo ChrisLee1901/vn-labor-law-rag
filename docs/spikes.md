@@ -241,7 +241,7 @@ Mọi trang dưới đây đọc ngày 2026-11-23 (`last_updated` của trang gh
 - `rewrites`: `/api/(.*)` sang service `api`; `/(.*)` sang service `web`.
 - `git.deploymentEnabled: false` (tắt Git integration; deploy từ Actions).
 
-Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastAPI trong một project, một domain; (2) `maxDuration: 120` khớp luật của repo (function dừng ở 120 s): ngân sách tổng `CHAT_BUDGET_S = 100` cộng 20 s dư cho khởi động và đóng stream, vẫn dưới trần 300 s của spec; (3) region `sin1` chỉ đặt cho `api` vì Supabase ở `ap-southeast-1`; không đặt `regions` cấp cao nhất để không đổi chỗ chạy của `web` ngoài ý muốn (hệ quả: các trang Next SSR như `/van-ban` chạy ở region mặc định và gọi API qua URL công khai; đo ở lần chạy thật, đổi nếu chậm); (4) `api` thuần Python, không `torch` (luật 2). Production **không** đặt `API_ORIGIN` (rewrite `/api` của `next.config` chỉ bật khi có biến này hoặc `next dev`); đừng đặt nó cho Preview của spike.
+Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastAPI trong một project, một domain; (2) `maxDuration: 120` khớp luật của repo (function dừng ở 120 s): ngân sách tổng `CHAT_BUDGET_S = 100` cộng 20 s dư cho khởi động và đóng stream, vẫn dưới trần 300 s của spec; (3) region `sin1` được thử đặt riêng cho `api` vì Supabase ở `ap-southeast-1`, còn `web` ở region mặc định của project (`iad1` với project mới). **Có thể không hợp lệ trên Hobby**: gói này chỉ cho một region ([Configuring regions](https://vercel.com/docs/functions/configuring-functions/region), 2026-08-11: "Hobby: Single region"; deploy quá số region của gói thì lỗi trước bước build), nên hai service ở hai region có thể làm deploy lỗi, hoặc một service chạy sai region. Tài liệu không chứng minh hình dạng hiện tại là sai, nên `vercel.json` giữ nguyên và hai biến thể được thử trong cùng một lần spike (xem cây quyết định). Nếu thật sự chỉ một region: các trang Next SSR như `/van-ban` cũng chạy ở region đó và gọi API qua URL công khai; đo ở lần chạy thật; (4) `api` thuần Python, không `torch` (luật 2). Production **không** đặt `API_ORIGIN` (rewrite `/api` của `next.config` chỉ bật khi có biến này hoặc `next dev`); đừng đặt nó cho Preview của spike.
 
 **Chưa có `crons`.** Tài liệu không nói cron cấp cao nhất có chạy với Services hay không, nên không thêm. Snippet và quy trình ở [deploy.md](deploy.md) mục Keep-alive giữ nguyên. Nếu spike đạt: thêm snippet đó, deploy lại và xem Project, Settings, Cron Jobs có hiện job không; không hiện thì chỉ dựa vào GitHub schedule và ghi vào đây.
 
@@ -253,6 +253,7 @@ Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastA
 4. `vercel deploy --env ENABLE_SPIKE_ENDPOINTS=1` có tới runtime của service khi dùng `--prebuilt`. Không tới thì `/api/ping` trả 404 JSON (checker nhận ra: "FastAPI trả lời nhưng không có route"); khi đó đặt biến cho Preview trong dashboard rồi chạy lại.
 5. Định dạng `x-vercel-id` và chỗ nó cho biết region của function.
 6. Cron ở chế độ Services (xem trên).
+7. **Hobby chỉ cho một region** ([Configuring regions](https://vercel.com/docs/functions/configuring-functions/region), 2026-08-11): `api` ghim `sin1` theo từng hàm còn `web` ở mặc định `iad1` thì deploy có thể lỗi vì số region, hoặc một service chạy sai region. Chưa rõ Vercel đếm region thế nào khi có `services`.
 
 ### Cách chạy (khớp [user-checklist.md](user-checklist.md) giai đoạn E)
 
@@ -311,7 +312,7 @@ Deployment Protection chặn (401 HTML "Authentication Required", hoặc redirec
 - **`path` là `/ping` (tiền tố bị cắt):** trái với tài liệu. Ghi lại và báo trước khi sửa route, vì mọi route trong `backend/app/api/*` khai báo `/api/...`.
 - **`/api/sse` dồn cục hoặc bị cắt:** ghi số event và giây bị cắt. Đây là lỗi ảnh hưởng chat, **không tự đổi**, báo lại.
 - **`--prebuilt` không hỗ trợ Services:** chuyển sang Vercel Git integration theo [deploy.md](deploy.md) mục "Phương án dự phòng" (các bước đã ghi ở đó, không lặp lại). Ghi ADR và sửa `ci.yml`, `deploy.yml` chỉ **sau khi bạn báo kết quả**; chưa có ADR nào.
-- **Region không phải `sin1`:** ghi giá trị thật và nơi đã cấu hình (có thể phải đặt `regions` cấp cao nhất); fallback của repo là `iad1`.
+- **Region không phải `sin1`, hoặc deploy lỗi vì số region:** Hobby chỉ cho 1 region: nếu deploy lỗi vì số region, đặt Project → Settings → Functions → Function Region = `sin1` (đặt cho cả project, cả `web` lẫn `api`) và xóa `regions` khỏi `functions` trong `vercel.json`; thử cả hai biến thể (giữ `regions` trong `functions`, và đặt ở cấp project) trong cùng một lần spike. Ghi giá trị region thật, nơi đã cấu hình và biến thể nào chạy được; fallback của repo là `iad1`.
 
 ### Kiểm tra AI SDK v7 (mục cuối của plan Task 0.4)
 
