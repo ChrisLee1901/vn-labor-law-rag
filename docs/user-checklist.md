@@ -18,8 +18,8 @@ Nhắc an toàn (luật cứng trong `CLAUDE.md`):
 ## Trạng thái hiện tại (đã kiểm tra)
 
 - Nhánh là `feat/rag-v1` (63 commit), chưa có remote. `main` local chỉ là commit `a3407a3` (import tài liệu và corpus raw, **chưa có workflow**). Plan viết `main` vì plan có trước nhánh này.
-- Chưa có: `vercel.json`, `docs/spikes.md`, `scripts/smoke_llm.py`, `kaggle/build_llamacpp.ipynb`, `kaggle/spike_sse.py`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
-- Có sẵn: `kaggle/serve.ipynb` (sinh từ `kaggle/build_notebook.py`), `docs/runbook-kaggle.md`, `docs/deploy.md`, `docs/ci.md`, `docs/runbook-eval.md`, `docs/runbook-observability.md`, 4 migration trong `supabase/migrations/`.
+- Chưa có: `vercel.json`, `scripts/smoke_llm.py`, `kaggle/spike_sse.py`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
+- Có sẵn: `kaggle/serve.ipynb` (sinh từ `kaggle/build_notebook.py`), `kaggle/build_llamacpp.ipynb` (spike 0.2, đã viết, chưa chạy), `docs/spikes.md` (khung, chưa có số), `docs/runbook-kaggle.md`, `docs/deploy.md`, `docs/ci.md`, `docs/runbook-eval.md`, `docs/runbook-observability.md`, 4 migration trong `supabase/migrations/`.
 
 ## Thứ tự và thời gian ước tính
 
@@ -119,11 +119,11 @@ Bật Kaggle chỉ trong lúc làm giai đoạn này. Hạn mức GPU Kaggle the
 
 ### C1. Spike 0.2 (llama.cpp sm_75) và 0.3 (ngrok + SSE)
 
-`kaggle/build_llamacpp.ipynb` và `kaggle/spike_sse.py` **chưa tồn tại**. Nhắn trợ lý: **"bắt đầu Task 0.2 và 0.3"** để trợ lý viết notebook và script spike (viết xong thì quay lại đây). Nếu bạn muốn tự làm, plan Task 0.2 mô tả lệnh build, nhưng cách ít lỗi nhất là dùng notebook trợ lý viết.
+`kaggle/build_llamacpp.ipynb` (spike 0.2) **đã viết**: Import vào Kaggle rồi Run All, bước 2 đến 6 bên dưới do notebook làm (chi tiết và cách xử lý lỗi: `docs/spikes.md#llama`). `kaggle/spike_sse.py` (spike 0.3) **chưa tồn tại**: nhắn trợ lý **"bắt đầu Task 0.3"** để viết.
 
 Nội dung cần làm (theo plan Task 0.2, 0.3):
 
-1. Tạo notebook Kaggle mới, Settings: **GPU T4 x2**, **Internet bật**. Add Secrets (`HF_TOKEN`, `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`), tick "Attached".
+1. Tạo notebook Kaggle mới (Import `kaggle/build_llamacpp.ipynb`), Settings: **GPU T4 x2**, **Internet bật**. Add Secrets (`HF_TOKEN`, `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`), tick "Attached".
 2. Build: `cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 && cmake --build build -j --target llama-server llama-bench` (khoảng 26 phút). Linker báo thiếu `libcuda.so` thì tạo symlink.
 3. Đóng gói `build/bin/*` và **mọi file `.so`** thành output, rồi *Save Version*, tạo Dataset private **`llamacpp-sm75-bin`**.
 4. Tải `Qwen3-8B-Q5_K_M.gguf` (repo GGUF của Qwen; không có thì bản `unsloth`), lưu thành Dataset private **`qwen3-8b-gguf`**.
@@ -142,7 +142,7 @@ Nội dung cần làm (theo plan Task 0.2, 0.3):
 - Số event nhận được trong spike SSE (x/150), có bị cắt hay buffer không, và HTTP status khi không có token.
 - Tên hai dataset đã tạo (xác nhận).
 
-Trợ lý ghi vào `docs/spikes.md` (file chưa có, trợ lý tạo).
+Trợ lý ghi vào `docs/spikes.md#llama` (khung đã có, còn trống số liệu). Khối `RESULT` ở cell cuối của notebook đã gom sẵn mọi số trên: chỉ cần dán nguyên khối đó.
 
 ### C2. Notebook serve thật (Task 2.2)
 
