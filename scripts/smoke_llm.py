@@ -440,6 +440,12 @@ def print_result(c, res, steps):
 
 
 def main(argv=None) -> int:
+    for stream in (
+        sys.stdout,
+        sys.stderr,
+    ):  # cp1252 pipes (Git Bash, redirects) can't print Vietnamese
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--runs", type=int, default=3, help="số lần chat stream")
     ap.add_argument(

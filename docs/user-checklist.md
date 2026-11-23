@@ -14,6 +14,7 @@ Nhắc an toàn (luật cứng trong `CLAUDE.md`):
 - Supabase chỉ có **1 project**. Migration chỉ additive. Không xóa hay ghi đè index đang active.
 - Trợ lý không tự commit hay push. Bạn yêu cầu thì mới làm.
 - Ký hiệu: `<TÊN>` là chỗ bạn thay bằng giá trị thật, không dán giá trị đó vào chat. Lệnh viết cho Git Bash; PowerShell thì thay `export X=...` bằng `$env:X="..."`.
+- Trên Windows, phòng khi stdout không phải console UTF-8 (Git Bash, hoặc ghi ra pipe/file), hãy đặt `PYTHONUTF8=1` (Git Bash: `export PYTHONUTF8=1`; PowerShell: `$env:PYTHONUTF8=1`) trước các lệnh Python in tiếng Việt. `scripts/smoke_llm.py` đã tự đặt UTF-8 cho stdout/stderr; một số script khác (ví dụ `answer_eval`, `latency_report`) cũng in thông báo tiếng Việt và chưa tự đặt, nên cứ đặt biến này cho chắc (smoke, ingest, retrieval_eval, eval).
 
 ## Trạng thái hiện tại (đã kiểm tra)
 

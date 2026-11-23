@@ -304,3 +304,22 @@ def test_usage_and_connection_errors(monkeypatch, capsys):
     monkeypatch.setenv("LLM_API_KEY", KEY)
     assert smoke.main([]) == 2
     assert KEY not in capsys.readouterr().err
+
+
+def test_subprocess_survives_non_utf8_stdout(serve):
+    """Git Bash / piped stdout on Windows is cp1252: the script prints Vietnamese everywhere."""
+    import os
+    import subprocess
+    import sys
+
+    serve()
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+    p = subprocess.run(
+        [sys.executable, str(Path(smoke.__file__)), "--runs", "1", "--timeout", "10"],
+        env=env,
+        capture_output=True,
+        timeout=60,
+    )
+    out = p.stdout.decode("utf-8")
+    assert p.returncode == 0, p.stderr.decode("utf-8", "replace")
+    assert "đừng dán URL" in out and "verdict: PASS" in out and "thứ tự" in out
