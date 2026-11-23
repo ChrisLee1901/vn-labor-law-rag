@@ -1,6 +1,7 @@
 """FastAPI app (`app.main:app`). Route khai báo kèm tiền tố /api (rewrite của Vercel giữ nguyên tiền tố)."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import httpx
@@ -89,6 +90,10 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityMiddleware)
     for m in (chat, health, docs, feedback, cron):
         app.include_router(m.router)
+    if os.environ.get("ENABLE_SPIKE_ENDPOINTS") == "1":  # spike Task 0.4, xóa sau spike
+        from app.api import spike
+
+        app.include_router(spike.router)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException):
