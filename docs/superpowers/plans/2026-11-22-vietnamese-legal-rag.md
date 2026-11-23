@@ -131,7 +131,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** Create `kaggle/spike_sse.py` (bỏ đi sau spike).
 
-- [ ] Trên Kaggle, viết FastAPI tối giản: `GET /stream` phát 1 event mỗi giây trong 150 giây, có bearer token. — *chờ live batch: cần Kaggle + ngrok thật*
+- [ ] Trên Kaggle, viết FastAPI tối giản: `GET /stream` phát 1 event mỗi giây trong 150 giây, có bearer token. — *chờ live batch: cần Kaggle + ngrok thật* — *code đã viết: kaggle/spike_sse.py, scripts/spike_sse_check.py; chờ chạy trên Kaggle*
 - [ ] Mở tunnel bằng `pyngrok` hoặc binary ngrok với `--url=<dev-domain>`, authtoken lấy từ Kaggle Secrets. — *chờ live batch: cần Kaggle + ngrok thật*
 - [ ] Từ máy local, chạy `curl -N -H "Authorization: Bearer …" https://<domain>/stream`. **Đạt** khi nhận đủ 150 event, không bị cắt và không bị buffer dồn cục. Ghi kết quả vào spikes. — *chờ live batch: cần Kaggle + ngrok thật*
 - [ ] Nếu ngrok cắt stream: ghi lại, rồi thử Cloudflare named tunnel (cần domain). Báo người dùng trước khi chọn phương án khác. — *chờ live batch: cần Kaggle + ngrok thật*

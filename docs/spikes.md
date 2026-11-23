@@ -5,7 +5,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 | Mục | Task | Trạng thái |
 |---|---|---|
 | [#llama](#llama) | 0.2 | notebook đã viết, chưa chạy trên Kaggle |
-| [#sse](#sse) | 0.3 | chưa chạy |
+| [#sse](#sse) | 0.3 | code đã viết (`kaggle/spike_sse.py`, `scripts/spike_sse_check.py`), chưa chạy trên Kaggle |
 | [#vercel](#vercel) | 0.4 | chưa chạy |
 | [#supabase](#supabase) | 0.5 | chưa chạy |
 | [#bench](#bench) | 2.3 | chưa chạy |
@@ -31,8 +31,8 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 
 1. Kaggle: **New Notebook > File > Import Notebook**, chọn `kaggle/build_llamacpp.ipynb`. Settings: **Accelerator = GPU T4 x2**, **Internet = On**. Secret `HF_TOKEN` là tùy chọn (repo công khai); có thì tick "Attached".
 2. **Run All**. Build mất khoảng 20 đến 30 phút, cell 4 không in gì giữa chừng. Notebook chạy xong là tự kết thúc.
-3. Cell cuối in khối `RESULT`. Copy nguyên khối gửi cho trợ lý (hoặc dán vào bảng bên dưới).
-4. **Save Version** và chọn **"Save & Run All (Commit)"**. Lưu ý chi phí: lựa chọn này **chạy lại toàn bộ notebook** trong một container mới (build khoảng 25 phút, tải khoảng 6 GB GGUF, rồi bench), tức là tốn thêm hạn mức GPU hằng tuần. Cần bước này vì chưa xác minh được phiên chạy tương tác (Run All) có để lại Output dùng được cho Dataset hay không. Notebook không có công tắc bỏ qua build, nên chỉ cần ghi nhận chi phí này; số đo dùng lần chạy nào cũng được (nên lấy khối `RESULT` của lần Commit, vì dataset cũng sinh từ đó). **Quick Save** có để lộ `/kaggle/working` thành Output hay không là **chưa xác minh**: đừng dựa vào nó. Tên nút và vị trí menu trên giao diện Kaggle trong mục này chưa xác minh (giao diện hay đổi): nếu khác, hãy làm theo ý nghĩa (lưu một phiên bản có Output).
+3. Cell cuối in khối `RESULT`. Lần Run All tương tác này chỉ là smoke test: khối `RESULT` gửi lại cho trợ lý là khối in ra ở lần chạy **Commit (Save & Run All)** ở bước 4, không phải khối này.
+4. **Save Version** và chọn **"Save & Run All (Commit)"**. Lưu ý chi phí: lựa chọn này **chạy lại toàn bộ notebook** trong một container mới (build khoảng 25 phút, tải khoảng 6 GB GGUF, rồi bench), tức là tốn thêm hạn mức GPU hằng tuần. Cần bước này vì chưa xác minh được phiên chạy tương tác (Run All) có để lại Output dùng được cho Dataset hay không. Notebook không có công tắc bỏ qua build, nên chỉ cần ghi nhận chi phí này; khối `RESULT` cần gửi lại là khối in trong log/output của lần **Commit (Save & Run All)** này (dataset cũng sinh từ lần chạy đó). **Quick Save** có để lộ `/kaggle/working` thành Output hay không là **chưa xác minh**: đừng dựa vào nó. Tên nút và vị trí menu trên giao diện Kaggle trong mục này chưa xác minh (giao diện hay đổi): nếu khác, hãy làm theo ý nghĩa (lưu một phiên bản có Output).
 5. Mở version vừa commit, tab **Output**, **New Dataset** để tạo hai Dataset private từ output (tên chính xác):
    - `llamacpp-sm75-bin` từ thư mục `llamacpp-sm75-bin/`
    - `qwen3-8b-gguf` từ thư mục `qwen3-8b-gguf/` (không chọn `qwen3-8b-gguf-q4-fallback/`, trừ khi Q5_K_M không đạt và bạn muốn dùng Q4_K_M)
@@ -106,9 +106,93 @@ Nếu cờ nào "KHÔNG": ghi tên đúng ở đây, sửa `kaggle/gateway.py`/`
 
 ## sse: gateway + ngrok + SSE 150 giây, Task 0.3
 
-**Trạng thái: chưa chạy.** Kết quả: TBD — chờ chạy trên Kaggle.
+**Trạng thái: code đã viết, chưa chạy trên Kaggle.** Mọi số bên dưới còn `TBD — chờ chạy`.
 
-Tiêu chí đạt (plan Task 0.3): `curl -N -H "Authorization: Bearer …" https://<domain>/stream` nhận đủ **150 event** (1 event/giây), không bị cắt, không bị buffer dồn cục. Request không có token trả **401**. Nếu ngrok cắt stream: ghi lại thời điểm, báo người dùng trước khi chọn phương án khác (ứng viên: Cloudflare named tunnel, cần domain riêng).
+**Gồm:** `kaggle/spike_sse.py` (server FastAPI tối giản + launcher; **xóa sau spike**) và `scripts/spike_sse_check.py` (checker chạy trên máy bạn, chỉ dùng thư viện chuẩn). Test: `kaggle/tests/test_spike_sse.py` (server), `pipelines/tests/test_spike_sse_check.py` (checker, theo tiền lệ `test_migration_guard.py`). Đã chạy thử cục bộ với `--no-tunnel` (10 event x 0,2 s: PASS); **chưa chạy qua ngrok thật**.
+
+Server: `GET /stream` đòi bearer (sai hoặc thiếu: 401 JSON `{"detail": ...}`), phát 150 event, mỗi giây 1 event (`id: n` + `data: {"n": n, "t": <epoch>}`), kết thúc bằng `event: done`. `GET /health` không cần token. Launcher mở tunnel đúng như `serve.ipynb` cell 7 (`pyngrok`: `ngrok.set_auth_token(...)`, `ngrok.connect(port, "http", domain=NGROK_DOMAIN)`), in `READY https://<domain>`, tự thoát sau `--duration-min` (mặc định 10, tối đa 30), không có vòng giữ sống. Dừng sớm bằng Ctrl-C hoặc Stop session.
+
+### Cách chạy
+
+**Kaggle** (notebook mới, Internet **On**, không cần GPU; Add-ons > Secrets thêm 3 secret `NGROK_AUTHTOKEN`, `NGROK_DOMAIN` (không kèm `https://`), `GATEWAY_API_KEY`, tick "Attached"). Dùng đúng domain và key của production để spike thử đúng thứ sẽ chạy thật. Tắt notebook `serve` nếu đang chạy (một domain chỉ giữ được một tunnel).
+
+Cell 1 (cần repo đã push công khai, xem [user-checklist.md](user-checklist.md) giai đoạn A):
+
+```python
+!git clone https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag
+!pip install -q pyngrok fastapi uvicorn
+```
+
+Chưa push repo: tải `kaggle/spike_sse.py` lên làm Dataset rồi `!cp /kaggle/input/<dataset>/spike_sse.py .`, hoặc dán nội dung file vào một cell bắt đầu bằng `%%writefile spike_sse.py` (rồi dùng `spike_sse.py` thay cho đường dẫn ở cell 2).
+
+Cell 2:
+
+```python
+!python vn-labor-law-rag/kaggle/spike_sse.py --duration-min 10
+```
+
+Chờ dòng `READY https://<domain>` rồi sang máy bạn. Launcher tự thoát sau 10 phút (in `STOPPED`). Xong thì **Stop session**.
+
+**Máy bạn** (Git Bash; PowerShell: `$env:GATEWAY_API_KEY="..."`). Đặt key trong shell, đừng dán vào chat:
+
+```bash
+export GATEWAY_API_KEY=<GATEWAY_API_KEY>
+python scripts/spike_sse_check.py --url https://<NGROK_DOMAIN>/stream --token-env GATEWAY_API_KEY --expect 150
+```
+
+Mất khoảng 2,5 phút. Mã thoát: 0 PASS, 1 FAIL, 2 lỗi dùng/kết nối. Script in khối `=== RESULT spike_sse ===` (đã che nhãn đầu của domain, không in token): dán nguyên khối đó vào chat và vào bảng dưới. Thử cục bộ không cần Kaggle: `python kaggle/spike_sse.py --no-tunnel --count 10 --interval 0.2 --port 8765` (cần `fastapi`, `uvicorn`, `GATEWAY_API_KEY` trong env), rồi `python scripts/spike_sse_check.py --url http://127.0.0.1:8765/stream --token-env GATEWAY_API_KEY --expect 10 --interval 0.2`.
+
+Tùy chọn: `curl -N -H "Authorization: Bearer $GATEWAY_API_KEY" https://<NGROK_DOMAIN>/stream` để tận mắt thấy event chạy từng giây. Đừng dán URL đầy đủ ở nơi công khai: nó là domain production.
+
+### Tiêu chí đạt (plan Task 0.3)
+
+Checker in `PASS` khi **tất cả** đúng:
+
+- Request không có token và request token sai đều trả **401**.
+- Stream HTTP 200, `content-type: text/event-stream` (không phải trang HTML cảnh báo của ngrok).
+- Nhận đủ **150 event** theo thứ tự `n = 1..150`, không hụt số, có `event: done` (không bị cắt sớm).
+- Không dồn cục: p95 khoảng cách giữa hai event nằm trong **[0,5 s; 2 s]** (interval server 1 s), không quá **3** event đến cách event trước **< 50 ms**, khoảng cách dài nhất **<= 5 s**. Ngưỡng là hằng số đặt tên ở đầu `scripts/spike_sse_check.py`; nếu bạn thấy ngưỡng sai, nói trước khi sửa, đừng nới ngưỡng để "đạt".
+
+### Kết quả (điền từ khối `RESULT`)
+
+| Trường | Giá trị |
+|---|---|
+| Ngày chạy (UTC) | TBD — chờ chạy |
+| `verdict` | TBD — chờ chạy |
+| `no_token_status` / `wrong_token_status` | TBD — chờ chạy |
+| `stream_http_status` | TBD — chờ chạy |
+| `headers` (content-type, cache-control, x-accel-buffering, transfer-encoding, server, header `ngrok-*`) | TBD — chờ chạy |
+| `events` (x/150), `done_event`, `cut` | TBD — chờ chạy |
+| `wall_time_s` | TBD — chờ chạy |
+| inter-arrival min / median / p95 / max (longest gap), giây | TBD — chờ chạy |
+| `clumped_events` | TBD — chờ chạy |
+| Thời điểm bị cắt (nếu có), tính từ event đầu | TBD — chờ chạy |
+
+### Đã tra cứu (2026-11-23), không phải số đo
+
+- Trang giới hạn gói free của ngrok: interstitial hiện "in front of all HTML browser traffic on the free tier", không ảnh hưởng client lập trình, bỏ qua được bằng header `ngrok-skip-browser-warning` hoặc `User-Agent` tùy biến. Checker gửi cả hai. Domain `.ngrok-free.dev` là gói free, nên nếu `content-type` trả về `text/html` thì đây là nghi phạm đầu tiên.
+- Cùng trang: free **1 GB/tháng** data transfer out; "Free endpoints have no timeout—they can stay online indefinitely". Trang **không** nêu giới hạn thời lượng hay idle timeout của một request HTTP, nên việc 150 s có bị cắt hay không **chưa xác minh** (đó là mục tiêu của spike). 150 event nhỏ chỉ vài chục KB, không đáng kể so với 1 GB.
+- `ERR_NGROK_334`: "The endpoint <URL> is already online" (domain đang được tunnel khác giữ).
+- `ERR_NGROK_4018`: "ngrok requires an account and a valid credential to start a session" (thiếu hoặc sai authtoken).
+- `ERR_NGROK_105`: authtoken không đúng định dạng (theo kết quả tìm kiếm trên trang tham chiếu lỗi ngrok, chưa mở trang gốc).
+- Mã lỗi khi hết băng thông 1 GB: **chưa xác minh** (trang không nêu).
+
+### Nếu ngrok cắt stream
+
+1. **Ghi lại** (không sửa số): khối `RESULT` đầy đủ, số event nhận được, dòng `cut:` do checker in, giây thứ mấy bị cắt, và log cell Kaggle (launcher có in lỗi không).
+2. Chạy lại một lần để phân biệt lỗi ngẫu nhiên và lỗi hệ thống.
+3. **Dừng và báo người dùng** kèm số liệu. **Không** tự chuyển sang Cloudflare named tunnel (cần domain riêng, đổi regex SSRF của `LLM_BASE_URL`, đổi kiến trúc): plan yêu cầu báo trước khi chọn phương án khác. Ứng viên để bàn: Cloudflare named tunnel.
+4. Nếu **dồn cục** (đủ event nhưng đến cùng lúc, `clumped_events` cao): cũng ghi và báo; thử thêm `curl -N` để loại trừ lỗi checker.
+
+### Nếu lỗi
+
+- `ERR_NGROK_334` / "domain already in use" lúc launcher mở tunnel: phiên cũ (notebook `serve` hoặc phiên spike trước) vẫn giữ domain. Stop session cũ hoặc đóng endpoint ở dashboard ngrok (Endpoints), rồi chạy lại.
+- `ERR_NGROK_4018` hoặc `ERR_NGROK_105`: sai `NGROK_AUTHTOKEN` (copy thiếu ký tự, hoặc secret chưa tick "Attached").
+- Launcher in `... missing (env var or Kaggle Secret)`: chưa Add hoặc chưa Attach secret nào đó. Giá trị không bao giờ được in.
+- `server failed to start (port busy?)`: đổi `--port`.
+- Checker thoát mã 2 (`cannot connect`): launcher chưa `READY`, sai domain, hoặc notebook đã tự thoát (sau 10 phút). `no_token_status` là 200 thay vì 401: bạn đang trỏ tới server khác hoặc code bị sửa; đừng bỏ qua.
+- Checker báo `content-type 'text/html'`: trang cảnh báo ngrok (xem phần tra cứu), hoặc URL thiếu `/stream`.
+- Hết băng thông hoặc mã lỗi ngrok khác: **chưa xác minh** mã nào; gửi nguyên văn mã `ERR_NGROK_...` trong response.
 
 ---
 

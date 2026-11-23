@@ -18,7 +18,7 @@ Nhắc an toàn (luật cứng trong `CLAUDE.md`):
 ## Trạng thái hiện tại (đã kiểm tra)
 
 - Nhánh là `feat/rag-v1` (63 commit), chưa có remote. `main` local chỉ là commit `a3407a3` (import tài liệu và corpus raw, **chưa có workflow**). Plan viết `main` vì plan có trước nhánh này.
-- Chưa có: `vercel.json`, `scripts/smoke_llm.py`, `kaggle/spike_sse.py`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
+- Chưa có: `vercel.json`, `scripts/smoke_llm.py`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
 - Có sẵn: `kaggle/serve.ipynb` (sinh từ `kaggle/build_notebook.py`), `kaggle/build_llamacpp.ipynb` (spike 0.2, đã viết, chưa chạy), `docs/spikes.md` (khung, chưa có số), `docs/runbook-kaggle.md`, `docs/deploy.md`, `docs/ci.md`, `docs/runbook-eval.md`, `docs/runbook-observability.md`, 4 migration trong `supabase/migrations/`.
 
 ## Thứ tự và thời gian ước tính
@@ -119,7 +119,7 @@ Bật Kaggle chỉ trong lúc làm giai đoạn này. Hạn mức GPU Kaggle the
 
 ### C1. Spike 0.2 (llama.cpp sm_75) và 0.3 (ngrok + SSE)
 
-`kaggle/build_llamacpp.ipynb` (spike 0.2) **đã viết**: Import vào Kaggle rồi Run All, bước 2 đến 6 bên dưới do notebook làm (chi tiết và cách xử lý lỗi: `docs/spikes.md#llama`). `kaggle/spike_sse.py` (spike 0.3) **chưa tồn tại**: nhắn trợ lý **"bắt đầu Task 0.3"** để viết.
+`kaggle/build_llamacpp.ipynb` (spike 0.2) **đã viết**: Import vào Kaggle rồi Run All, bước 2 đến 6 bên dưới do notebook làm (chi tiết và cách xử lý lỗi: `docs/spikes.md#llama`). `kaggle/spike_sse.py` + `scripts/spike_sse_check.py` (spike 0.3) **đã viết**, chưa chạy thật (chi tiết, ngưỡng đạt và cách xử lý lỗi: `docs/spikes.md#sse`).
 
 Nội dung cần làm (theo plan Task 0.2, 0.3):
 
@@ -129,7 +129,7 @@ Nội dung cần làm (theo plan Task 0.2, 0.3):
 4. Tải `Qwen3-8B-Q5_K_M.gguf` (repo GGUF của Qwen; không có thì bản `unsloth`), lưu thành Dataset private **`qwen3-8b-gguf`**.
 5. `llama-bench -m <gguf> -ngl 99 -p 4096 -n 256`. Ghi pp và tg tok/s. **Đạt** khi tg >= 15 tok/s (không đạt: thử Q4_K_M và ghi lại).
 6. `llama-server --help`: xác nhận các cờ `--jinja`, `-fa`, `--chat-template-kwargs`, `--api-key`, `--reasoning-budget`. Đây là điểm **chưa xác minh**: `kaggle/serve.ipynb` đang dùng `--jinja --reasoning-budget 0 --chat-template-kwargs {"enable_thinking": false}`; nếu bản build không nhận cờ nào, ghi tên cờ đúng.
-7. Spike SSE: `GET /stream` phát 1 event/giây trong 150 giây qua ngrok. Từ máy bạn: `curl -N -H "Authorization: Bearer <GATEWAY_API_KEY>" https://<NGROK_DOMAIN>/stream`. **Đạt** khi nhận đủ 150 event, không bị cắt, không bị dồn cục. Kiểm thêm: không có token thì 401.
+7. Spike SSE (notebook Kaggle riêng, không cần GPU, 3 secret `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`; tắt notebook `serve` trước vì một domain chỉ giữ một tunnel). Cell 1: `!git clone https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag` rồi `!pip install -q pyngrok fastapi uvicorn` (cần đã push, giai đoạn A). Cell 2: `!python vn-labor-law-rag/kaggle/spike_sse.py --duration-min 10`, chờ dòng `READY https://<NGROK_DOMAIN>` (tự thoát sau 10 phút). Trên máy bạn: `export GATEWAY_API_KEY=<GATEWAY_API_KEY>` rồi `python scripts/spike_sse_check.py --url https://<NGROK_DOMAIN>/stream --token-env GATEWAY_API_KEY --expect 150`. **Đạt** khi checker in `verdict: PASS` (đủ 150 event, không bị cắt, không dồn cục, không token và token sai đều 401).
 
 **Dấu hiệu thành công:** hai dataset private tồn tại; tg >= 15 tok/s; 150 event đủ qua curl.
 
@@ -139,10 +139,10 @@ Nội dung cần làm (theo plan Task 0.2, 0.3):
 
 - `pp` và `tg` tok/s của llama-bench (số), quant đã dùng.
 - Danh sách cờ `llama-server` xác nhận có/không: `--jinja`, `-fa`, `--chat-template-kwargs`, `--api-key`, `--reasoning-budget`.
-- Số event nhận được trong spike SSE (x/150), có bị cắt hay buffer không, và HTTP status khi không có token.
+- Spike SSE: dán nguyên khối `=== RESULT spike_sse ===` của checker (đã che domain, không chứa token).
 - Tên hai dataset đã tạo (xác nhận).
 
-Trợ lý ghi vào `docs/spikes.md#llama` (khung đã có, còn trống số liệu). Khối `RESULT` ở cell cuối của notebook đã gom sẵn mọi số trên: chỉ cần dán nguyên khối đó.
+Trợ lý ghi vào `docs/spikes.md#llama` (khung đã có, còn trống số liệu). Khối `RESULT` ở cell cuối của notebook đã gom sẵn mọi số trên: dán nguyên khối in ra ở lần chạy **Commit (Save & Run All)** (lần Run All tương tác chỉ là smoke test).
 
 ### C2. Notebook serve thật (Task 2.2)
 
