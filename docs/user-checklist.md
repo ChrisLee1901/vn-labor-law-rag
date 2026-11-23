@@ -125,7 +125,7 @@ Nội dung cần làm (theo plan Task 0.2, 0.3):
 
 1. Tạo notebook Kaggle mới (Import `kaggle/build_llamacpp.ipynb`), Settings: **GPU T4 x2**, **Internet bật**. Add Secrets (`HF_TOKEN`, `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`), tick "Attached".
 2. Build: `cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 && cmake --build build -j --target llama-server llama-bench` (khoảng 26 phút). Linker báo thiếu `libcuda.so` thì tạo symlink.
-3. Đóng gói `build/bin/*` và **mọi file `.so`** thành output, rồi *Save Version*, tạo Dataset private **`llamacpp-sm75-bin`**.
+3. Đóng gói `build/bin/*` và **mọi file `.so`** thành output, rồi **Save Version > "Save & Run All (Commit)"** (chạy lại toàn bộ notebook, khoảng 25 phút build + 6 GB tải + bench, tốn thêm hạn mức GPU; Quick Save có lộ Output hay không là chưa xác minh; tên nút trên giao diện Kaggle chưa xác minh), rồi tạo Dataset private **`llamacpp-sm75-bin`** từ tab Output của version đó (New Dataset). Chi tiết: `docs/spikes.md#llama`.
 4. Tải `Qwen3-8B-Q5_K_M.gguf` (repo GGUF của Qwen; không có thì bản `unsloth`), lưu thành Dataset private **`qwen3-8b-gguf`**.
 5. `llama-bench -m <gguf> -ngl 99 -p 4096 -n 256`. Ghi pp và tg tok/s. **Đạt** khi tg >= 15 tok/s (không đạt: thử Q4_K_M và ghi lại).
 6. `llama-server --help`: xác nhận các cờ `--jinja`, `-fa`, `--chat-template-kwargs`, `--api-key`, `--reasoning-budget`. Đây là điểm **chưa xác minh**: `kaggle/serve.ipynb` đang dùng `--jinja --reasoning-budget 0 --chat-template-kwargs {"enable_thinking": false}`; nếu bản build không nhận cờ nào, ghi tên cờ đúng.

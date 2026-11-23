@@ -137,3 +137,16 @@ def test_check_flags(helpers):
     )
     assert not got["--api-key"] and not got["-np"] and not got["--reasoning-budget"]
     assert helpers["help_line"](text, "--flash-attn").startswith("-fa,")
+
+
+def test_ld_library_path_keeps_original():
+    # serve.ipynb prepends to Kaggle's own LD_LIBRARY_PATH; the spike must test the same thing,
+    # so the assigned VALUE (text after the assignment) must reference os.environ
+    values = [
+        m.group(1)
+        for src in _codes()
+        for m in re.finditer(r"LD_LIBRARY_PATH\"?\s*[=:]\s*(.*)", src)
+    ]
+    assert len(values) >= 3
+    for v in values:
+        assert "os.environ" in v, v

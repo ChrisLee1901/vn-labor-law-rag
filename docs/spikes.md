@@ -32,8 +32,8 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 1. Kaggle: **New Notebook > File > Import Notebook**, chọn `kaggle/build_llamacpp.ipynb`. Settings: **Accelerator = GPU T4 x2**, **Internet = On**. Secret `HF_TOKEN` là tùy chọn (repo công khai); có thì tick "Attached".
 2. **Run All**. Build mất khoảng 20 đến 30 phút, cell 4 không in gì giữa chừng. Notebook chạy xong là tự kết thúc.
 3. Cell cuối in khối `RESULT`. Copy nguyên khối gửi cho trợ lý (hoặc dán vào bảng bên dưới).
-4. **Save Version** (Save & Run All hoặc Quick Save) để thư mục output được lưu.
-5. Tạo hai Dataset private từ output của notebook: **Output > New Dataset** (tên chính xác):
+4. **Save Version** và chọn **"Save & Run All (Commit)"**. Lưu ý chi phí: lựa chọn này **chạy lại toàn bộ notebook** trong một container mới (build khoảng 25 phút, tải khoảng 6 GB GGUF, rồi bench), tức là tốn thêm hạn mức GPU hằng tuần. Cần bước này vì chưa xác minh được phiên chạy tương tác (Run All) có để lại Output dùng được cho Dataset hay không. Notebook không có công tắc bỏ qua build, nên chỉ cần ghi nhận chi phí này; số đo dùng lần chạy nào cũng được (nên lấy khối `RESULT` của lần Commit, vì dataset cũng sinh từ đó). **Quick Save** có để lộ `/kaggle/working` thành Output hay không là **chưa xác minh**: đừng dựa vào nó. Tên nút và vị trí menu trên giao diện Kaggle trong mục này chưa xác minh (giao diện hay đổi): nếu khác, hãy làm theo ý nghĩa (lưu một phiên bản có Output).
+5. Mở version vừa commit, tab **Output**, **New Dataset** để tạo hai Dataset private từ output (tên chính xác):
    - `llamacpp-sm75-bin` từ thư mục `llamacpp-sm75-bin/`
    - `qwen3-8b-gguf` từ thư mục `qwen3-8b-gguf/` (không chọn `qwen3-8b-gguf-q4-fallback/`, trừ khi Q5_K_M không đạt và bạn muốn dùng Q4_K_M)
    File `dataset-metadata.json` trong hai thư mục chỉ dùng nếu bạn upload bằng `kaggle datasets create -p <thư mục>`: khi đó thay `<KAGGLE_USERNAME>` bằng username Kaggle của bạn (placeholder này cố ý để trống, không commit username). Upload qua giao diện thì bỏ qua file đó.
