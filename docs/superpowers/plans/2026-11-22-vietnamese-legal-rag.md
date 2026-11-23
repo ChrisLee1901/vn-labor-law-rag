@@ -131,7 +131,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** Create `kaggle/spike_sse.py` (bỏ đi sau spike).
 
-- [ ] Trên Kaggle, viết FastAPI tối giản: `GET /stream` phát 1 event mỗi giây trong 150 giây, có bearer token. — *chờ live batch: cần Kaggle + ngrok thật* — *code đã viết: kaggle/spike_sse.py, scripts/spike_sse_check.py; chờ chạy trên Kaggle*
+- [x] Trên Kaggle, viết FastAPI tối giản: `GET /stream` phát 1 event mỗi giây trong 150 giây, có bearer token. — *đã viết + test local: kaggle/spike_sse.py, scripts/spike_sse_check.py (dry-run local PASS); chưa chạy trên Kaggle/ngrok thật*
 - [ ] Mở tunnel bằng `pyngrok` hoặc binary ngrok với `--url=<dev-domain>`, authtoken lấy từ Kaggle Secrets. — *chờ live batch: cần Kaggle + ngrok thật*
 - [ ] Từ máy local, chạy `curl -N -H "Authorization: Bearer …" https://<domain>/stream`. **Đạt** khi nhận đủ 150 event, không bị cắt và không bị buffer dồn cục. Ghi kết quả vào spikes. — *chờ live batch: cần Kaggle + ngrok thật*
 - [ ] Nếu ngrok cắt stream: ghi lại, rồi thử Cloudflare named tunnel (cần domain). Báo người dùng trước khi chọn phương án khác. — *chờ live batch: cần Kaggle + ngrok thật*
@@ -141,10 +141,10 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** Create `vercel.json`, `frontend/` (create-next-app tối thiểu), `backend/app/main.py` (hello), `.github/workflows/spike-deploy.yml` (xóa sau spike).
 
-- [ ] `vercel.json` khai báo 2 service: `web` (root `frontend`) và `api` (root `backend`, entrypoint `app.main:app`). Rewrite `/api/(.*)` sang `api`, phần còn lại sang `web`. Đặt `"git": {"deploymentEnabled": false}`. Tra cú pháp chính xác ở docs Vercel Services tại thời điểm làm. — *chờ live batch: spike Vercel Services chưa làm, chưa có vercel.json* — *code đã viết: vercel.json, backend/app/api/spike.py (ENABLE_SPIKE_ENDPOINTS), spike-deploy.yml, scripts/spike_vercel_check.py; chờ chạy với project Vercel thật*
-- [ ] FastAPI: `GET /api/ping` trả `{"ok": true}`, và `GET /api/sse` stream 30 event mỗi 1 giây. — *chờ live batch: spike Vercel Services chưa làm*
+- [x] `vercel.json` khai báo 2 service: `web` (root `frontend`) và `api` (root `backend`, entrypoint `app.main:app`). Rewrite `/api/(.*)` sang `api`, phần còn lại sang `web`. Đặt `"git": {"deploymentEnabled": false}`. Tra cú pháp chính xác ở docs Vercel Services tại thời điểm làm. — *đã viết: vercel.json (khóa `services`, theo docs Vercel 2026-08, đã validate schema); chưa kiểm chứng trên Vercel thật (`--prebuilt`+Services, khóa `functions`, Hobby 1 region)*
+- [x] FastAPI: `GET /api/ping` trả `{"ok": true}`, và `GET /api/sse` stream 30 event mỗi 1 giây. — *đã viết + test local: backend/app/api/spike.py, chỉ mount khi ENABLE_SPIKE_ENDPOINTS=1; /api/ping trả thêm path/root_path để trả lời câu hỏi tiền tố /api*
 - [ ] `[USER]` Tạo project Vercel, lấy `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` và đưa vào GitHub Secrets. — *chờ [USER]*
-- [ ] Workflow chạy `vercel pull --yes --environment=preview`, rồi `vercel build`, rồi `vercel deploy --prebuilt`. — *chờ live batch: cần project Vercel thật*
+- [x] Workflow chạy `vercel pull --yes --environment=preview`, rồi `vercel build`, rồi `vercel deploy --prebuilt`. — *đã viết: .github/workflows/spike-deploy.yml (actionlint sạch) + scripts/spike_vercel_check.py; chưa chạy trên Vercel thật*
 - [ ] **Đạt** khi URL preview có: `/` render Next.js, `/api/ping` ok, `/api/sse` stream từng event (`curl -N`). Ghi thêm: FastAPI nhận path có `/api` hay đã bị cắt, chỗ đặt `maxDuration` và region `sin1` có nhận không. — *chờ live batch: cần project Vercel thật*
 - [ ] Nếu `--prebuilt` không hỗ trợ Services: chuyển sang Vercel Git integration, ghi ADR, và sửa Task 6.3 theo hướng đó. — *chờ live batch: cần project Vercel thật*
 - [ ] Kiểm tra AI SDK v7: tên field của `source-url`, `data-*`, `error`, và header `x-vercel-ai-ui-message-stream`. Ghi vào spikes để Task 4.3 dùng. — *đã làm phần local: đã kiểm tra field qua docs trực tuyến ở Task 4.2 (docs/ai-sdk-protocol.md); còn lại: chưa ghi docs/spikes.md, chưa thử trên Vercel thật*
@@ -346,9 +346,9 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 **Files:** Create `scripts/smoke_llm.py` (chạy local, đọc `LLM_BASE_URL`, `LLM_API_KEY` từ env).
 
-- [ ] Script kiểm tra: `/health` có `llm` true; embed 2 câu tiếng Việt ra 1024 chiều; rerank câu "lương tối thiểu vùng I" xếp đoạn liên quan lên đầu; chat stream một câu tiếng Việt, đo TTFT và tok/s trên 3 lần. — *code đã viết: scripts/smoke_llm.py (+ test); chờ chạy với gateway live*
+- [x] Script kiểm tra: `/health` có `llm` true; embed 2 câu tiếng Việt ra 1024 chiều; rerank câu "lương tối thiểu vùng I" xếp đoạn liên quan lên đầu; chat stream một câu tiếng Việt, đo TTFT và tok/s trên 3 lần. — *đã viết + test với gateway giả: scripts/smoke_llm.py; chưa chạy với gateway live*
 - [ ] Ghi số đo vào `docs/spikes.md#bench`. **Đạt** khi TTFT p50 < 3 s qua tunnel và câu trả lời là tiếng Việt có dấu đúng. — *chờ live batch: cần gateway live qua tunnel*
-- [ ] Commit `chore: LLM smoke and benchmark script`. — *chờ live batch: chưa làm, hoãn sang live batch (R19)*
+- [x] Commit `chore: LLM smoke and benchmark script`. — *commit 700b1d3 + fix 545d323*
 
 ---
 
