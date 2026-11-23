@@ -51,10 +51,10 @@ Lý do (đọc từ `.github/workflows/ci.yml`, `deploy.yml`, `keepalive.yml`):
 
 Các bước:
 
-1. Trên GitHub, tạo repo **public**, tài khoản cá nhân, tên `real_rag`, **không** tick README/.gitignore/license (repo đã có).
+1. Trên GitHub, tạo repo **public**, tài khoản cá nhân, tên `vn-labor-law-rag`, **không** tick README/.gitignore/license (repo đã có).
 2. Trong thư mục repo:
    ```bash
-   git remote add origin https://github.com/<TÀI-KHOẢN>/real_rag.git
+   git remote add origin https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag.git
    git push -u origin main
    git push -u origin feat/rag-v1
    ```

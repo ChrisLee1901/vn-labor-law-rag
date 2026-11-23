@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-UA = "real-rag-corpus-fetcher/0.1"
+UA = "vn-labor-law-rag-corpus-fetcher/0.1"
 DELAY = 1.5
 _HREF = re.compile(r'href="([^"]+)"')
 _last = 0.0

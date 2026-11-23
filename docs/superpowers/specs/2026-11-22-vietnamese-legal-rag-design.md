@@ -99,7 +99,7 @@ Tên biến, cấu trúc module bên trong mỗi thư mục, style UI chi tiết
 
 ## 8. Các quyết định do Claude tự chốt (người dùng kiểm tra lại)
 
-- Tên hiển thị của app: **"Trợ lý Pháp luật Lao động"**. Repo: `real_rag`.
+- Tên hiển thị của app: **"Trợ lý Pháp luật Lao động"**. Repo: `vn-labor-law-rag`.
 - UI gồm 3 trang: **Chat** (khung chat + panel nguồn + badge online/offline + câu hỏi gợi ý), **Văn bản** (danh sách 8 văn bản với tình trạng hiệu lực, xem từng Điều), **Giới thiệu** (sơ đồ kiến trúc + bảng eval).
 - Không có đăng nhập. Lịch sử chat chỉ lưu ở localStorage.
 - ~~2 project Supabase~~ → người dùng chốt 1 project (xem 6.5). Dev local trỏ vào project đó, chỉ đọc hoặc ghi vào `index_version` thử nghiệm.

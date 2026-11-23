@@ -1,4 +1,4 @@
-# CLAUDE.md — real_rag (Trợ lý Pháp luật Lao động)
+# CLAUDE.md — vn-labor-law-rag (Trợ lý Pháp luật Lao động)
 
 Project portfolio (CV): RAG pháp luật lao động tiếng Việt end-to-end. Next.js + FastAPI chạy trên Vercel. Supabase pgvector làm kho dữ liệu. LLM, embedder và reranker **tự host trên Kaggle**, gọi qua ngrok. CI/CD bằng GitHub Actions.
 

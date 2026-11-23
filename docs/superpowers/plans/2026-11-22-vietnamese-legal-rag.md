@@ -71,7 +71,7 @@ graph LR
 ## Cấu trúc file (khóa ở đây)
 
 ```
-real_rag/
+vn-labor-law-rag/
 ├─ CLAUDE.md  README.md  LICENSE  .gitignore  .gitleaks.toml  vercel.json
 ├─ docs/
 │  ├─ research/                  # research_notes/ + reports/ chuyển vào đây (Task 0.1)
@@ -112,7 +112,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 - [x] `git init -b main`. `.gitignore` gồm: `.env*`, `.venv/`, `node_modules/`, `.next/`, `__pycache__/`, `.vercel/`, `*.gguf`, `eval/cache/*.tmp`.
 - [x] `git mv` hai thư mục research vào `docs/research/` (hoặc `mv` trước commit đầu). Sửa đường dẫn trong spec và CLAUDE.md.
-- [ ] `[USER]` Tạo repo GitHub **public trên tài khoản cá nhân** (không phải org), tên `real_rag`, rồi `git remote add origin … && git push -u origin main`. — *đã làm phần local: repo local (nhánh main + feat/rag-v1); còn lại: chưa có remote/push, chờ [USER] tạo repo GitHub*
+- [ ] `[USER]` Tạo repo GitHub **public trên tài khoản cá nhân** (không phải org), tên `vn-labor-law-rag`, rồi `git remote add origin … && git push -u origin main`. — *đã làm phần local: repo local (nhánh main + feat/rag-v1); còn lại: chưa có remote/push, chờ [USER] tạo repo GitHub*
 - [ ] `[USER]` Tạo tài khoản và lưu secret vào trình quản lý mật khẩu: Kaggle (đã xác minh số điện thoại, bật Internet cho notebook), ngrok (lấy authtoken + claim 1 dev domain tĩnh), Supabase, Vercel (Hobby, đăng nhập bằng GitHub), Langfuse Cloud (Hobby), Upstash (Redis free), Hugging Face (token read). — *chờ [USER]*
 - [x] Kiểm tra: `git log --oneline` có commit `chore: bootstrap repo`; `docs/research/reports/` tồn tại.
 
@@ -206,7 +206,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 | ND374-2025 | 374/2025/NĐ-CP | 2026-01-01 | — | — |
 
 - [x] Test hỏng `test_parse_file_links_prefers_docx_then_doc_then_pdf`: từ fixture HTML, phần tử đầu tiên chứa `file_name=` và kết thúc bằng `.docx`, mọi link PDF là `congbaocdn`.
-- [x] Viết `download.py`: cào lại trang mỗi lần chạy (không hard-code token g7), User-Agent `real-rag-corpus-fetcher/0.1`, nghỉ 1,5 s giữa các request, bỏ qua file đã có cùng sha256. Riêng `ND399-2026` lấy PDF datafiles ghi trong yaml.
+- [x] Viết `download.py`: cào lại trang mỗi lần chạy (không hard-code token g7), User-Agent `vn-labor-law-rag-corpus-fetcher/0.1`, nghỉ 1,5 s giữa các request, bỏ qua file đã có cùng sha256. Riêng `ND399-2026` lấy PDF datafiles ghi trong yaml.
 - [x] Test PASS. Chạy CLI thật, so sánh với `docs/corpus/fetch_log.json`: 8 code đều có file, sha256 khớp hoặc đã cập nhật. — *thực hiện khác kế hoạch: so với `docs/corpus/manifest.json` (thay `fetch_log.json`, R10); 17 sha256 khớp*
 - [x] Commit `feat(pipelines): legal_docs registry and Công báo downloader`.
 

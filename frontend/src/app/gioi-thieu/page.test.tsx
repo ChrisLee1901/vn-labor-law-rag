@@ -109,9 +109,9 @@ describe("/gioi-thieu", () => {
     const { unmount } = render(<AboutPage />);
     expect(screen.queryByRole("link", { name: /GitHub/ })).toBeNull();
     unmount();
-    vi.stubEnv("NEXT_PUBLIC_REPO_URL", "https://github.com/x/real_rag");
+    vi.stubEnv("NEXT_PUBLIC_REPO_URL", "https://github.com/x/vn-labor-law-rag");
     render(<AboutPage />);
-    expect(screen.getByRole("link", { name: /GitHub/ })).toHaveAttribute("href", "https://github.com/x/real_rag");
+    expect(screen.getByRole("link", { name: /GitHub/ })).toHaveAttribute("href", "https://github.com/x/vn-labor-law-rag");
     expect(screen.getByRole("link", { name: "Văn bản pháp luật" })).toHaveAttribute("href", "/van-ban");
     expect(screen.getByRole("link", { name: /congbao\.chinhphu\.vn/ })).toHaveAttribute("href", "https://congbao.chinhphu.vn");
   });
