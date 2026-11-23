@@ -187,6 +187,7 @@ Checker in `PASS` khi **tất cả** đúng:
 ### Nếu lỗi
 
 - `ERR_NGROK_334` / "domain already in use" lúc launcher mở tunnel: phiên cũ (notebook `serve` hoặc phiên spike trước) vẫn giữ domain. Stop session cũ hoặc đóng endpoint ở dashboard ngrok (Endpoints), rồi chạy lại.
+- Launcher in `ngrok setup failed: <TênLỗi> [ERR_NGROK_nnn]` rồi thoát mã 3: chỉ in tên lỗi và mã (authtoken bị loại khỏi log). Mã `ERR_NGROK_...` ở dòng này đối chiếu với các mục dưới.
 - `ERR_NGROK_4018` hoặc `ERR_NGROK_105`: sai `NGROK_AUTHTOKEN` (copy thiếu ký tự, hoặc secret chưa tick "Attached").
 - Launcher in `... missing (env var or Kaggle Secret)`: chưa Add hoặc chưa Attach secret nào đó. Giá trị không bao giờ được in.
 - `server failed to start (port busy?)`: đổi `--port`.

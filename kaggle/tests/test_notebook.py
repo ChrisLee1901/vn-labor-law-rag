@@ -72,3 +72,33 @@ def test_no_secret_values_printed():
         if c["cell_type"] == "code" and not src.startswith("%%"):
             for line in src.splitlines():
                 assert not ("print(" in line and risky.search(line)), line
+
+
+def test_ngrok_cell_guards_authtoken(monkeypatch):
+    import subprocess
+    import sys
+    import types
+
+    import pytest
+
+    src = next(_src(c) for c in _nb()["cells"] if _key(c) == "7")
+    assert src.index("try:") < src.index("set_auth_token") < src.index("except")
+    assert 'replace(os.environ["NGROK_AUTHTOKEN"]' in src and "from None" in src
+
+    secret = "SECRET-TOKEN-123"
+
+    def boom(*a, **k):
+        raise subprocess.CalledProcessError(
+            1, ["ngrok", "config", "add-authtoken", secret]
+        )
+
+    mod = types.ModuleType("pyngrok")
+    mod.ngrok = types.SimpleNamespace(set_auth_token=boom, connect=boom)
+    monkeypatch.setitem(sys.modules, "pyngrok", mod)
+    monkeypatch.setenv("NGROK_AUTHTOKEN", secret)
+    monkeypatch.setenv("NGROK_DOMAIN", "x.ngrok-free.dev")
+    with pytest.raises(RuntimeError) as ei:
+        exec(compile(src, "<cell7>", "exec"), {})
+    e = ei.value
+    assert secret not in str(e) and "CalledProcessError" in str(e)
+    assert e.__cause__ is None and e.__suppress_context__

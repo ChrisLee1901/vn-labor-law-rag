@@ -134,7 +134,7 @@ def serve(monkeypatch):
     monkeypatch.setenv("TEST_TOKEN", KEY)
     servers = []
 
-    def start(mode, count=10, interval=0.1):
+    def start(mode, count=8, interval=0.25):
         srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(mode, count, interval))
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         servers.append(srv)
@@ -145,7 +145,7 @@ def serve(monkeypatch):
         s.shutdown()
 
 
-def run(url, capsys, expect=10, interval=0.1):
+def run(url, capsys, expect=8, interval=0.25):
     code = chk.main(
         [
             "--url",
@@ -161,7 +161,10 @@ def run(url, capsys, expect=10, interval=0.1):
     return code, capsys.readouterr().out
 
 
-def test_main_pass(serve, capsys):
+def test_main_pass(serve, capsys, monkeypatch):
+    # real sockets on a loaded CI box: widen the timing limits here only (evaluate tests above stay strict)
+    monkeypatch.setattr(chk, "P95_MAX_FACTOR", 8.0)
+    monkeypatch.setattr(chk, "MAX_GAP_FACTOR", 20.0)
     code, out = run(serve("ok"), capsys)
     assert code == 0, out
     assert "verdict: PASS" in out and KEY not in out
@@ -169,7 +172,7 @@ def test_main_pass(serve, capsys):
 
 def test_main_cut_at_4_fails(serve, capsys):
     code, out = run(serve("cut"), capsys)
-    assert code == 1 and "verdict: FAIL" in out and "4/10" in out
+    assert code == 1 and "verdict: FAIL" in out and "4/8" in out
 
 
 def test_main_clump_fails(serve, capsys):

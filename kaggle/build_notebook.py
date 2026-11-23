@@ -155,11 +155,16 @@ print("local stack ready in", int(time.time() - t0), "s")
 """
 
 NGROK = r"""# [7] public tunnel (static ngrok domain -> :8000)
-import os
+import os, re
 from pyngrok import ngrok
 
-ngrok.set_auth_token(os.environ["NGROK_AUTHTOKEN"])
-ngrok.connect(8000, "http", domain=os.environ["NGROK_DOMAIN"])
+try:
+    ngrok.set_auth_token(os.environ["NGROK_AUTHTOKEN"])
+    ngrok.connect(8000, "http", domain=os.environ["NGROK_DOMAIN"])
+except Exception as e:
+    # pyngrok puts the authtoken in its exception text: report only the type and the ERR_NGROK code
+    code = re.search(r"ERR_NGROK_\d+", str(e).replace(os.environ["NGROK_AUTHTOKEN"], "***"))
+    raise RuntimeError(f"ngrok setup failed: {type(e).__name__} {code.group() if code else ''}") from None
 PUBLIC_URL = "https://" + os.environ["NGROK_DOMAIN"]
 """
 

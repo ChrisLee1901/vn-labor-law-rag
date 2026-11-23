@@ -13,6 +13,7 @@ import asyncio
 import hmac
 import json
 import os
+import re
 import threading
 import time
 
@@ -90,6 +91,28 @@ def _secret(name: str) -> str:
     return value.strip()
 
 
+def _describe(e: Exception, secret: str) -> str:
+    """Type name plus an ERR_NGROK_nnn code, never the message: pyngrok puts argv (the authtoken) in it."""
+    code = re.search(r"ERR_NGROK_\d+", str(e).replace(secret, "***"))
+    return type(e).__name__ + (f" {code.group()}" if code else "")
+
+
+def open_tunnel(port: int, domain: str, authtoken: str):
+    from pyngrok import ngrok  # lazy: tests/CI never need it
+
+    try:
+        ngrok.set_auth_token(authtoken)
+        ngrok.connect(port, "http", domain=domain)  # same call as serve.ipynb cell 7
+    except Exception as e:
+        print(f"ngrok setup failed: {_describe(e, authtoken)}", flush=True)
+        try:
+            ngrok.kill()
+        except Exception:
+            pass
+        raise SystemExit(3) from None
+    return ngrok
+
+
 def main(argv=None) -> int:
     a = parse_args(argv)
     token = _secret("GATEWAY_API_KEY")
@@ -128,12 +151,7 @@ def main(argv=None) -> int:
         if a.no_tunnel:
             print(f"READY http://127.0.0.1:{a.port}", flush=True)
         else:
-            from pyngrok import ngrok  # lazy: tests/CI never need it
-
-            ngrok.set_auth_token(authtoken)
-            ngrok.connect(
-                a.port, "http", domain=domain
-            )  # same call as serve.ipynb cell 7
+            ngrok = open_tunnel(a.port, domain, authtoken)
             print(f"READY https://{domain}", flush=True)
         print(f"stops by itself in {a.duration_min:g} min (or Ctrl-C)", flush=True)
         while time.monotonic() < deadline and thread.is_alive():
@@ -145,7 +163,7 @@ def main(argv=None) -> int:
             try:
                 ngrok.kill()  # closes tunnel(s) and the ngrok process
             except Exception as e:
-                print("ngrok shutdown:", type(e).__name__)
+                print("ngrok shutdown:", _describe(e, authtoken))
         server.should_exit = True
         thread.join(timeout=5)
         print("STOPPED", flush=True)
