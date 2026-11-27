@@ -99,7 +99,7 @@ LLAMA_RUN = r"""# [3] llama-server on GPU 0 (Qwen3-8B Q5_K_M, thinking off)
 import glob, json, os, subprocess
 from huggingface_hub import hf_hub_download
 
-ggufs = sorted(glob.glob("/kaggle/input/qwen3-8b-gguf/**/*.gguf", recursive=True), key=lambda p: "Q5_K_M" not in p)
+ggufs = sorted(glob.glob("/kaggle/input/**/*.gguf", recursive=True), key=lambda p: "Q5_K_M" not in p)
 if ggufs:
     GGUF = ggufs[0]
 else:
