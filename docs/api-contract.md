@@ -138,7 +138,7 @@ data: {"type":"data-citation-warning","data":{"invalid":["S9"],"mismatch":[]}}
 ```
 
 ```
-data: {"type":"error","errorText":"Mô hình ngừng phản hồi, vui lòng thử lại."}
+data: {"type":"error","errorText":"Kết nối tới mô hình bị gián đoạn, vui lòng thử lại."}
 
 data: [DONE]
 ```

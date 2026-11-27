@@ -8,7 +8,7 @@ import httpx
 
 from app.config import CHAT_MAX_TOKENS
 
-_ALLOWED = re.compile(r"^https://[a-z0-9-]+\.ngrok-free\.(app|dev)$")
+_ALLOWED = re.compile(r"https://[a-z0-9-]+\.ngrok-free\.(app|dev)")
 _TIMEOUT = httpx.Timeout(60.0, connect=3.0)
 
 
@@ -31,14 +31,14 @@ class Gateway:
     ):
         # allow_any chỉ dùng trong test (bỏ kiểm tra allowlist ngrok); production luôn để False.
         # client: client dùng chung của app; Gateway không sở hữu nên aclose() không đóng nó.
-        self.base_url = base_url.rstrip("/") if base_url else None
+        self.base_url = base_url.strip().rstrip("/") if base_url else None
         self.api_key = api_key
         self.allow_any = allow_any
         self._client = client
         self._owns_client = client is None
 
     def is_allowed(self, url: str | None = None) -> bool:
-        return bool(url) and _ALLOWED.match(url) is not None  # type: ignore[arg-type]
+        return bool(url) and _ALLOWED.fullmatch(url) is not None  # type: ignore[arg-type]
 
     def _url(self, path: str) -> str:
         if not self.base_url or not (self.allow_any or self.is_allowed(self.base_url)):

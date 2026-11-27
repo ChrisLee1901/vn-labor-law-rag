@@ -80,6 +80,14 @@ async def refusal_tau(conn: psycopg.AsyncConnection) -> float:
 
 async def read_json(request: Request, max_bytes: int = 64 * 1024):
     """Đọc body JSON có giới hạn kích thước (kể cả khi không có Content-Length). 413 nếu quá lớn, 422 nếu không phải JSON."""
+    if (
+        not request.headers.get("content-type", "")
+        .lower()
+        .startswith("application/json")
+    ):
+        raise HTTPException(
+            415, "Yêu cầu phải có Content-Type application/json."
+        )  # chặn POST chéo trang không qua preflight
     declared = request.headers.get("content-length", "")
     if declared.isdigit() and int(declared) > max_bytes:
         raise HTTPException(413, "Yêu cầu quá lớn.")

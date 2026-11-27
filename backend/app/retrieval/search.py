@@ -1,6 +1,7 @@
 """Hybrid retrieval: FTS + vector (RRF trong SQL) -> rerank qua gateway -> top Điều cha; ID nêu rõ trong câu hỏi được ghim lên đầu."""
 
 import asyncio
+import math
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date
@@ -17,6 +18,7 @@ from app.retrieval.tsquery import build_tsquery
 TOP_PARENTS = 6
 CANDIDATES = 40
 MAX_QUERY_CHARS = 2000  # trần đầu vào cho regex ref (an toàn độ phức tạp / lạm dụng)
+EMBED_DIM = 1024
 MAX_RERANK_CHARS = 8000  # giới hạn của gateway /v1/rerank
 
 
@@ -29,7 +31,7 @@ class Candidate:
 
 
 def extract_query_ids(q: str) -> list[str]:
-    """ID pháp lý người dùng nêu rõ cả văn bản lẫn Điều, vd `ND145-2020:D12:K2`."""
+    """ID pháp lý người dùng nêu rõ cả văn bản lẫn Điều, vd "Điều 12 khoản 2 Nghị định 145/2020/NĐ-CP" (ID thô `ND145-2020:D12:K2` không được parse)."""
     ids: list[str] = []
     for r in extract_refs(q[:MAX_QUERY_CHARS], self_doc=None):
         if r.explicit_doc and r.dst_doc_code is not None and r.article is not None:
@@ -62,11 +64,14 @@ async def _hybrid(
     conn, question: str, as_of: date, index_version: int, vec: list[float] | None
 ) -> list[tuple[str, str, float]]:
     qe = "[" + ",".join(map(str, vec)) + "]" if vec is not None else None
+    tq = build_tsquery(
+        question
+    )  # bỏ dấu SAU khi lọc từ dừng có dấu ("tôi", "có" không thành nhiễu)
     cur = await conn.execute(
         "select id, parent_id, score from hybrid_search(%s::text, %s::text, %s::halfvec, %s, %s::date, %s)",
         (
-            build_tsquery(question),
-            build_tsquery(strip_diacritics(question)),
+            tq,
+            strip_diacritics(tq) if tq else None,
             qe,
             index_version,
             as_of,
@@ -86,9 +91,12 @@ async def _rerank(
     )
     text = dict(await cur.fetchall())
     kept = [r for r in rows if r[0] in text]
-    ranked = await gw.rerank(
-        question, [text[r[0]][:MAX_RERANK_CHARS] for r in kept], len(kept)
-    )
+    async with asyncio.timeout(
+        RERANK_TIMEOUT_S
+    ):  # chỉ bao call gateway, không bao lần đọc DB ở trên
+        ranked = await gw.rerank(
+            question, [text[r[0]][:MAX_RERANK_CHARS] for r in kept], len(kept)
+        )
     best: dict[str, Candidate] = {}
     for idx, s in ranked:
         cid, pid, rrf = kept[idx]
@@ -125,7 +133,12 @@ async def retrieve(
         try:
             with span("embed"):
                 async with asyncio.timeout(EMBED_TIMEOUT_S):
-                    vec = (await gw.embed([question]))[0]
+                    v = (await gw.embed([question]))[0]
+                if len(v) != EMBED_DIM or not all(map(math.isfinite, v)):
+                    raise LLMOffline(
+                        "bad embedding"
+                    )  # DataError ở pgvector sẽ thành 500
+                vec = v
         except (LLMOffline, TimeoutError):
             pass
     with span("hybrid_search"):
@@ -134,8 +147,7 @@ async def retrieve(
     if vec is not None and rows:
         try:
             with span("rerank"):
-                async with asyncio.timeout(RERANK_TIMEOUT_S):
-                    cands = await _rerank(conn, gw, question, rows, index_version)
+                cands = await _rerank(conn, gw, question, rows, index_version)
         except (LLMOffline, TimeoutError):
             pass
     pinned = await _pinned(conn, question, index_version)

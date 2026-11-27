@@ -173,3 +173,37 @@ async def test_pin_text_adds_refs_from_raw_question_deduped(aconn):
         pin_text="Điều 12 Nghị định 145/2020",
     )
     assert [c.parent_id for c in same].count("ND145-2020:D12") == 1
+
+
+async def test_unaccented_tsquery_drops_accented_stopwords():
+    from app.retrieval.search import _hybrid
+
+    seen = []
+
+    class Conn:
+        async def execute(self, sql, params):
+            seen.append(params)
+
+            class C:
+                async def fetchall(self):
+                    return []
+
+            return C()
+
+    await _hybrid(Conn(), "tôi có lương tối thiểu mà đó", TODAY, 1, None)
+    assert seen[0][0] == "lương | tối | thiểu"
+    assert seen[0][1] == "luong | toi | thieu"  # không có toi|co|ma|do nhiễu
+
+
+@pytest.mark.parametrize(
+    "bad", [[0.1] * 3, [float("nan")] * 1024, [float("inf")] * 1024]
+)
+async def test_bad_embedding_degrades_to_fts_not_500(aconn, bad):
+    class Fake(Gateway):
+        async def embed(self, texts):
+            return [bad]
+
+    got = await retrieve(
+        "luong toi thieu", TODAY, Fake(None, "k"), aconn, 1, online=True
+    )
+    assert isinstance(got, list)

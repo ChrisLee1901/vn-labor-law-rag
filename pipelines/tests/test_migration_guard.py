@@ -30,6 +30,10 @@ def run(tmp_path, sql, dry=DRY):
         "ALTER TABLE chunks\n  DROP   COLUMN fts;",
         "truncate chunks;",
         "Delete  From articles where true;",
+        "alter table chunks drop fts;",
+        "drop schema foo cascade;",
+        "DROP VIEW v;",
+        "drop materialized view mv;",
     ],
 )
 def test_destructive_sql_fails(tmp_path, capsys, sql):

@@ -161,7 +161,8 @@ async def build_plan(
 ) -> Plan:
     online = await llm_online(gw)
     llm = "online" if online else "offline"
-    as_of = as_of_req or extract_as_of(question[:MAX_QUERY_CHARS], today_vn())
+    today = today_vn()
+    as_of = as_of_req or extract_as_of(question[:MAX_QUERY_CHARS], today)
     search_q = question
     if online and any(m["role"] == "user" for m in history):  # từ lượt hỏi thứ 2
         with trace.span("condense"):
@@ -173,6 +174,16 @@ async def build_plan(
                 search_q = condensed[:MAX_Q] or question
             except Exception as e:  # condense hỏng thì dùng câu hỏi gốc
                 log.warning("condense failed, using raw question: %r", e)
+    if (
+        as_of_req is None and as_of == today
+    ):  # câu hỏi không nêu ngày: lấy từ câu độc lập / lượt user trước
+        for t in (
+            search_q,
+            *(m["content"] for m in reversed(history) if m["role"] == "user"),
+        ):
+            if (d := extract_as_of(t[:MAX_QUERY_CHARS], date.min)) != date.min:
+                as_of = d
+                break
     conn = PooledReader(
         request
     )  # mượn pool từng câu lệnh: không giữ kết nối khi chờ embed / rerank

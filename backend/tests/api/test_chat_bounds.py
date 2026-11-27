@@ -377,8 +377,16 @@ def test_invalid_input_never_calls_rate_limiter(client, monkeypatch):
         ).status_code
         == 422
     )
-    assert client.post("/api/chat", content=b"{bad").status_code == 422
-    assert client.post("/api/chat", content=b"x" * 70000).status_code == 413
+    js = {"content-type": "application/json"}
+    assert client.post("/api/chat", content=b"{bad", headers=js).status_code == 422
+    assert client.post("/api/chat", content=b"x" * 70000, headers=js).status_code == 413
+    assert (
+        client.post("/api/chat", content=b"{}").status_code == 415
+    )  # text/plain chéo trang
+    assert (
+        client.get("/docs").status_code == 404
+        and client.get("/openapi.json").status_code == 404
+    )
     assert calls == []
 
 

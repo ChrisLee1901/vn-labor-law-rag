@@ -86,7 +86,13 @@ def _error(status: int, detail, headers: dict | None = None) -> JSONResponse:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Vietnamese legal RAG", lifespan=lifespan)
+    app = FastAPI(
+        title="Vietnamese legal RAG",
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
     app.add_middleware(SecurityMiddleware)
     for m in (chat, health, docs, feedback, cron):
         app.include_router(m.router)

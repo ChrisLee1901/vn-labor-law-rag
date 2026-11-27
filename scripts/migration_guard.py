@@ -1,9 +1,9 @@
 """Chặn migration phá dữ liệu trước `supabase db push` (CLAUDE.md luật 5: migration chỉ additive).
 
 Đọc đầu ra của `supabase db push --dry-run` (file hoặc stdin), lấy tên các migration sắp áp, quét SQL đã bỏ comment tìm
-DROP TABLE / DROP COLUMN / TRUNCATE / DELETE FROM. Có hit thì exit 1, trừ khi file có dòng comment
+DROP TABLE / DROP COLUMN / ALTER TABLE ... DROP / DROP SCHEMA|VIEW|TYPE|MATERIALIZED / TRUNCATE / DELETE FROM. Có hit thì exit 1, trừ khi file có dòng comment
 `-- allow-destructive: <lý do>` (override có chủ đích, nằm trong diff nên được review).
-shortcut: bỏ comment bằng regex, không hiểu `--` hay `/*` nằm trong chuỗi ký tự; DROP INDEX/FUNCTION/POLICY không bị chặn.
+shortcut: bỏ comment bằng regex, không hiểu `--` hay `/*` nằm trong chuỗi ký tự; DROP INDEX/FUNCTION/POLICY, ALTER COLUMN TYPE, UPDATE không bị chặn.
 Nâng cấp bằng parser SQL thật nếu migration bắt đầu dùng chuỗi dài hoặc dynamic SQL.
 """
 
@@ -13,7 +13,8 @@ import sys
 from pathlib import Path
 
 DESTRUCTIVE = re.compile(
-    r"\b(drop\s+table|drop\s+column|truncate|delete\s+from)\b", re.IGNORECASE
+    r"\b(drop\s+table|drop\s+column|truncate|delete\s+from|drop\s+(?:schema|view|type|materialized)|alter\s+table\b[^;]*\bdrop)\b",
+    re.IGNORECASE,
 )
 OVERRIDE = re.compile(r"^[ \t]*--[ \t]*allow-destructive:[ \t]*\S", re.MULTILINE)
 NAME = re.compile(r"\b(\d{14}_[\w-]+\.sql)\b")

@@ -51,3 +51,17 @@ def test_other_date_formats():
     assert extract_as_of("từ 1-1-2027", T) == date(2027, 1, 1)
     assert extract_as_of("từ 01.01.2027", T) == date(2027, 1, 1)
     assert extract_as_of("Nghị định 145/2020/NĐ-CP quy định gì", T) == T
+
+
+def test_document_citation_date_is_not_as_of():
+    for q in (
+        "Nghị định 145/2020/NĐ-CP ngày 14/12/2020 quy định gì",
+        "Nghị định 145 năm 2020 quy định gì",
+        "Nghị định 293/2025/NĐ-CP ngày 10 tháng 11 năm 2025 quy định gì",
+        "Thông tư 10 năm 2020 hướng dẫn gì",
+    ):
+        assert extract_as_of(q, T) == T, q
+    # ngày thật cách xa số hiệu vẫn được nhận
+    assert extract_as_of("Nghị định 145/2020/NĐ-CP, từ 1/1/2027 lương?", T) == date(
+        2027, 1, 1
+    )

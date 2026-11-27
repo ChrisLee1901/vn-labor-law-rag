@@ -114,3 +114,19 @@ def test_app_functions_pin_search_path(conn):
         if not any(c.startswith("search_path=") for c in cfg or [])
     ]
     assert unpinned == []
+
+
+def test_every_public_table_has_rls(conn):
+    off = conn.execute(
+        """select relname from pg_class
+           where relnamespace = 'public'::regnamespace and relkind in ('r', 'p') and not relrowsecurity"""
+    ).fetchall()
+    assert off == []
+
+
+def test_hybrid_search_not_executable_by_public(conn):
+    (public_can,) = conn.execute(
+        """select exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                          where p.proname = 'hybrid_search' and a.grantee = 0 and a.privilege_type = 'EXECUTE')"""
+    ).fetchone()
+    assert not public_can

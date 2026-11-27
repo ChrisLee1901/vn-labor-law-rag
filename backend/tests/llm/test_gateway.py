@@ -222,3 +222,11 @@ async def test_chat_stream_caps_max_tokens():
     route = respx.post(f"{URL}/v1/chat/completions").respond(content=sse("[DONE]"))
     _ = [d async for d in gw().chat_stream([{"role": "user", "content": "hi"}])]
     assert json.loads(route.calls[0].request.content)["max_tokens"] == 1024
+
+
+def test_allowlist_rejects_trailing_newline_and_strips_whitespace():
+    assert not Gateway(None, "k").is_allowed("https://abc-12.ngrok-free.app\n")
+    assert (
+        Gateway(" https://abc-12.ngrok-free.app\n", "k").base_url
+        == "https://abc-12.ngrok-free.app"
+    )

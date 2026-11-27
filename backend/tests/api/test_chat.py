@@ -353,3 +353,27 @@ def test_llm_health_cached_15s(client):
         ask(client)
         ask(client)
     assert gw.health_route.call_count == 1  # /health probe một lần cho hai request
+
+
+def test_as_of_carries_over_from_earlier_user_turn(client, monkeypatch):
+    seen = []
+    real = chat_mod.retrieve
+
+    async def spy(question, as_of, *a, **kw):
+        seen.append(as_of)
+        return await real(question, as_of, *a, **kw)
+
+    monkeypatch.setattr(chat_mod, "retrieve", spy)
+    hist = [
+        turn("user", "Từ 1/1/2027 lương tối thiểu vùng I?"),
+        turn("assistant", "5.310.000 đồng [S1]"),
+    ]
+    with Gateway(condensed="lương tối thiểu vùng II"):
+        ask(client, "Còn vùng II?", hist)
+    assert [d.isoformat() for d in seen] == ["2027-01-01"]
+    seen.clear()
+    with Gateway(condensed="lương tối thiểu vùng II", online=False):
+        ask(
+            client, "Còn vùng II?", hist
+        )  # offline: không condense, vẫn quét lượt trước
+    assert [d.isoformat() for d in seen] == ["2027-01-01"]
