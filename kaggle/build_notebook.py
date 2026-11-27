@@ -45,17 +45,24 @@ else:
     SRC = "/kaggle/working/llama.cpp"
     if not os.path.isdir(SRC):
         subprocess.run(["git", "clone", "--depth", "1", "https://github.com/ggml-org/llama.cpp", SRC], check=True)
-    # libcuda stub: lets the linker resolve -lcuda on a machine without the driver library at build time.
-    # Kept in its own dir and used for the build only, never at runtime (the real driver must win there).
-    stub_dir = "/kaggle/working/cuda-stub"
-    os.makedirs(stub_dir, exist_ok=True)
-    stub = "/usr/local/cuda/lib64/stubs/libcuda.so"
-    for n in ("libcuda.so", "libcuda.so.1"):
-        if not os.path.lexists(f"{stub_dir}/{n}"):
+    # libcuda stub: FindCUDAToolkit needs it at CONFIGURE time to create CUDA::cuda_driver, and the linker needs it at build time.
+    # CUDA 12 keeps it in lib64/stubs, CUDA 13 in targets/x86_64-linux/lib/stubs, so search for it.
+    # Private dir, used for the build only, never at runtime (the real driver must win there).
+    stubs = sorted({os.path.realpath(x) for x in glob.glob("/usr/local/cuda*/**/stubs/libcuda.so*", recursive=True)})
+    stub = next((x for x in stubs if x.endswith("libcuda.so")), stubs[0] if stubs else None)
+    print("libcuda stub:", stub)
+    cfg = ["cmake", "-B", "build", "-DGGML_CUDA=ON", "-DCMAKE_CUDA_ARCHITECTURES=75", "-DLLAMA_OPENSSL=OFF"]
+    env = dict(os.environ)
+    if stub:
+        stub_dir = "/kaggle/working/cuda-stub"
+        shutil.rmtree(stub_dir, ignore_errors=True)
+        os.makedirs(stub_dir)
+        for n in ("libcuda.so", "libcuda.so.1"):
             os.symlink(stub, f"{stub_dir}/{n}")
-    env = dict(os.environ, LIBRARY_PATH=stub_dir, LD_LIBRARY_PATH=stub_dir + ":" + os.environ.get("LD_LIBRARY_PATH", ""))
-    subprocess.run(["cmake", "-B", "build", "-DGGML_CUDA=ON", "-DCMAKE_CUDA_ARCHITECTURES=75", "-DLLAMA_CURL=OFF"],
-                   cwd=SRC, env=env, check=True)
+        env.update(LIBRARY_PATH=stub_dir, LD_LIBRARY_PATH=(stub_dir + ":" + os.environ.get("LD_LIBRARY_PATH", "")).rstrip(":"))
+        cfg += [f"-DCMAKE_LIBRARY_PATH={stub_dir}", "-DCUDAToolkit_ROOT=/usr/local/cuda",
+                f"-DCUDA_cuda_driver_LIBRARY={stub}", f"-DCUDA_DRIVER_LIBRARY={stub}"]
+    subprocess.run(cfg, cwd=SRC, env=env, check=True)
     subprocess.run(["cmake", "--build", "build", "--target", "llama-server", "-j", str(os.cpu_count())],
                    cwd=SRC, env=env, check=True)
     shutil.copytree(f"{SRC}/build", DEST, dirs_exist_ok=True, symlinks=True)

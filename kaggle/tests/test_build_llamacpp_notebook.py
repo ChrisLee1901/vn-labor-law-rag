@@ -150,3 +150,22 @@ def test_ld_library_path_keeps_original():
     assert len(values) >= 3
     for v in values:
         assert "os.environ" in v, v
+
+
+def test_configure_gets_stub_dir_and_runtime_never_does():
+    build = next(s for s in _codes() if s.startswith("# [4]"))
+    # discovered before configure, passed to configure always, retry variant for cuda_driver
+    assert 'f"-DCMAKE_LIBRARY_PATH={stub_dir}"' in build
+    assert build.index("glob.glob") < build.index('"cmake", "-B"')
+    assert "libcuda.so" in build and "targets" in build
+    assert "CUDA_cuda_driver_LIBRARY" in build and "cuda_driver" in build
+    # configure errors must not raise before the retry
+    assert build.count("check=False") >= 2
+    # package + later cells (runtime) never put the stub on LD_LIBRARY_PATH, and assert it does not leak
+    runtime = "\n".join(
+        s for s in _codes() if s.startswith(("# [5]", "# [7]", "# [8]"))
+    )
+    for line in runtime.splitlines():
+        if "LD_LIBRARY_PATH" in line:
+            assert "stub" not in line, line
+    assert '"stubs" in x' in runtime

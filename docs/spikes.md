@@ -23,7 +23,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 **Đã tra cứu (2026-11-23), không phải số đo:**
 
 - Tag llama.cpp `b12651` tồn tại, trỏ tới commit `f5e6915c28f10330885fcb9243a93ae98d3115ab` (GitHub API). Notebook ghim tag này (`LLAMA_CPP_REF`).
-- `LLAMA_CURL` trong `CMakeLists.txt` hiện chỉ còn là cảnh báo deprecated (không còn `option`), và `LLAMA_OPENSSL` mặc định ON. Notebook không truyền `-DLLAMA_CURL=OFF`, mà truyền `-DLLAMA_OPENSSL=OFF`. (`kaggle/serve.ipynb` cell 2 vẫn truyền `-DLLAMA_CURL=OFF`: chỉ sinh cảnh báo khi build dự phòng, không lỗi.)
+- `LLAMA_CURL` trong `CMakeLists.txt` hiện chỉ còn là cảnh báo deprecated (không còn `option`), và `LLAMA_OPENSSL` mặc định ON. Notebook không truyền `-DLLAMA_CURL=OFF`, mà truyền `-DLLAMA_OPENSSL=OFF`. (`kaggle/serve.ipynb` cell 2 cũng đã đổi sang `-DLLAMA_OPENSSL=OFF` và dùng cùng cách tìm stub libcuda.)
 - Repo HF `Qwen/Qwen3-8B-GGUF` có cả `Qwen3-8B-Q5_K_M.gguf` (5,85 GB) và `Qwen3-8B-Q4_K_M.gguf` (5,03 GB). Bản `unsloth/Qwen3-8B-GGUF` cũng có hai file này; notebook chỉ dùng nó khi repo chính thức thiếu file.
 - README `tools/server` của llama.cpp (master) ghi: `--jinja`, `-fa, --flash-attn [on|off|auto]` (mặc định `auto`), `--chat-template-kwargs STRING`, `--api-key KEY`, `--reasoning-budget N`, `-np, --parallel N`, `-c, --ctx-size N`, `--host`, `--port`. Đây là tài liệu của master, **chưa** phải `--help` của bản build trên Kaggle: bảng "Cờ" dưới đây vẫn `TBD`.
 
@@ -65,7 +65,7 @@ Thư viện CUDA runtime (`libcudart`, `libcublas`...) không nằm trong datase
 | CUDA toolkit | TBD — chờ chạy trên Kaggle |
 | GPU (tên, VRAM, driver) | TBD — chờ chạy trên Kaggle |
 | Thời gian build (phút) | TBD — chờ chạy trên Kaggle |
-| Cần symlink `libcuda` stub? | TBD — chờ chạy trên Kaggle |
+| `stub_dir`, `stub_file`, `configure_variant` (libcuda stub) | TBD — chờ chạy trên Kaggle |
 | Dung lượng `llamacpp-sm75-bin` (MB) | TBD — chờ chạy trên Kaggle |
 | GGUF dùng (repo, MB) | TBD — chờ chạy trên Kaggle |
 | Q5_K_M: pp4096 tok/s | TBD — chờ chạy trên Kaggle |
@@ -93,7 +93,8 @@ Nếu cờ nào "KHÔNG": ghi tên đúng ở đây, sửa `kaggle/gateway.py`/`
 
 ### Nếu lỗi
 
-- **Link lỗi `cannot find -lcuda`**: cell 4 tự tạo symlink stub (`/usr/local/cuda/lib64/stubs/libcuda.so`) rồi build lại, và in dòng `LINK FAILED on libcuda -> ...`. Stub chỉ dùng lúc build, không đóng gói. Vẫn lỗi thì gửi 60 dòng cuối cell in ra (log đầy đủ ở `/kaggle/working/build.log`).
+- **Configure lỗi `Target "ggml-cuda" links to: CUDA::cuda_driver but the target was not found`** (gặp ở lần chạy đầu: llama.cpp `b12651`, GCC 13.3.0, CUDA 13.0.88, `CMAKE_CUDA_ARCHITECTURES=75` được nhận là `75-real`): FindCUDAToolkit không thấy stub `libcuda`. Image CUDA 13 để stub ở `/usr/local/cuda/targets/x86_64-linux/lib/stubs/libcuda.so` (CUDA 12: `lib64/stubs`). Cell 4 giờ **tìm stub trước khi configure** (`/usr/local/cuda*/**/stubs/libcuda.so*`), in ra những gì tìm thấy (không thấy thì in nội dung các thư mục CUDA để biết bố cục), tạo thư mục riêng chứa symlink `libcuda.so`/`libcuda.so.1`, **luôn** truyền `-DCMAKE_LIBRARY_PATH=<stub_dir>` khi configure, và đặt `LIBRARY_PATH`/`LD_LIBRARY_PATH` chỉ cho tiến trình build. Nếu configure vẫn báo `cuda_driver`, thử lại một lần với `-DCUDAToolkit_ROOT`, `-DCUDA_cuda_driver_LIBRARY`, `-DCUDA_DRIVER_LIBRARY` trỏ thẳng tới file stub (tên biến khác nhau giữa các bản CMake, nên đặt cả hai). Lỗi configure không còn làm cell dừng trước khi thử lại; thất bại cuối cùng in 60 dòng cuối, phiên bản cmake và danh sách stub. Stub không được vào `LD_LIBRARY_PATH` lúc chạy hay vào gói (cell 5 assert nếu `ldd` thấy đường dẫn `stubs`). **Chưa chạy trên Kaggle**, chờ chủ repo chạy lại.
+- **Link lỗi `cannot find -lcuda`**: stub nói ở trên cũng đi vào `LIBRARY_PATH` lúc build. Vẫn lỗi thì gửi 60 dòng cuối cell in ra (log đầy đủ ở `/kaggle/working/build.log`).
 - **Thiếu `.so` khi chạy** (`error while loading shared libraries`, hoặc cell 5 assert): mở `MANIFEST.txt`, so với `ldd` in ra ở cell 5. Thiếu lib nằm dưới `/usr/local/cuda` thì đặt `BUNDLE_CUDA_LIBS = True`.
 - **OOM / bench lỗi**: cell 7 in 30 dòng cuối stderr và tự thử `Q4_K_M`. Bench chỉ dùng GPU 0 (`CUDA_VISIBLE_DEVICES=0`), GPU 1 dành cho embedder/reranker khi serve.
 - **Repo HF không có file hoặc tải lỗi**: cell 6 tự thử `unsloth/Qwen3-8B-GGUF`. Thêm secret `HF_TOKEN` nếu bị giới hạn tốc độ.

@@ -135,7 +135,7 @@ Nội dung cần làm (theo plan Task 0.2, 0.3):
 
 **Dấu hiệu thành công:** hai dataset private tồn tại; tg >= 15 tok/s; 150 event đủ qua curl.
 
-**Nếu lỗi:** ngrok cắt stream giữa chừng (**chưa xác minh**, đây là mục tiêu của spike): ghi lại thời điểm bị cắt, **đừng tự chọn phương án khác**, báo trợ lý (plan nêu Cloudflare named tunnel, cần domain riêng). Build lỗi thiếu `.so` hoặc VRAM: gửi 30 dòng cuối log build.
+**Nếu lỗi:** nếu cell [4] báo `CUDA::cuda_driver ... target was not found` (stub libcuda trên image CUDA 13), đã sửa ở commit `fix(kaggle): find libcuda stub at configure time (CUDA 13)`: kéo bản mới của notebook (`kaggle/build_llamacpp.ipynb`) rồi chạy lại. ngrok cắt stream giữa chừng (**chưa xác minh**, đây là mục tiêu của spike): ghi lại thời điểm bị cắt, **đừng tự chọn phương án khác**, báo trợ lý (plan nêu Cloudflare named tunnel, cần domain riêng). Build lỗi thiếu `.so` hoặc VRAM: gửi 30 dòng cuối log build.
 
 **Gửi lại cho trợ lý** (task 0.2, 0.3):
 
