@@ -26,7 +26,7 @@ subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyngrok==7.2.3", 
 """
 
 LLAMA_BIN = r"""# [2] llama-server binary (dataset llamacpp-sm75-bin, else build from source ~26 min)
-import glob, os, shutil, stat, subprocess
+import glob, os, re, shutil, stat, subprocess
 
 DATASET = "/kaggle/input/llamacpp-sm75-bin"
 DEST = "/kaggle/working/llama-bin"
@@ -45,12 +45,29 @@ else:
     SRC = "/kaggle/working/llama.cpp"
     if not os.path.isdir(SRC):
         subprocess.run(["git", "clone", "--depth", "1", "https://github.com/ggml-org/llama.cpp", SRC], check=True)
-    # libcuda stub: FindCUDAToolkit needs it at CONFIGURE time to create CUDA::cuda_driver, and the linker needs it at build time.
-    # CUDA 12 keeps it in lib64/stubs, CUDA 13 in targets/x86_64-linux/lib/stubs, so search for it.
-    # Private dir, used for the build only, never at runtime (the real driver must win there).
-    stubs = sorted({os.path.realpath(x) for x in glob.glob("/usr/local/cuda*/**/stubs/libcuda.so*", recursive=True)})
-    stub = next((x for x in stubs if x.endswith("libcuda.so")), stubs[0] if stubs else None)
-    print("libcuda stub:", stub)
+    # libcuda: FindCUDAToolkit needs it at CONFIGURE time to create CUDA::cuda_driver, the linker at build time.
+    # First hit wins: toolkit stubs (CUDA 13: targets/x86_64-linux/lib/stubs), toolkit compat, ldconfig, bounded find.
+    # Linking the real driver/compat lib is fine (resolved dynamically at runtime). Private dir, build only.
+    def _out(cmd, timeout):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+        except (subprocess.TimeoutExpired, OSError):
+            return ""
+
+    _ld = re.findall(r"^\s*libcuda\.so(?:\.1)?\s+\(.*\)\s*=>\s*(\S+)", _out(["ldconfig", "-p"], 30), re.M)
+    _find = _out(["find", "/usr/lib", "/usr/lib64", "/lib", "/usr/local/nvidia", "/opt", "-name", "libcuda.so*"], 30).split()
+    stub = None
+    for name, paths in (("toolkit stubs", glob.glob("/usr/local/cuda*/**/stubs/libcuda.so*", recursive=True)),
+                        ("toolkit compat", glob.glob("/usr/local/cuda*/compat/libcuda.so*")),
+                        ("ldconfig", _ld), ("find", _find)):
+        paths = sorted({os.path.realpath(x) for x in paths})
+        print("libcuda candidates", name, ":", paths or "none")
+        if paths and not stub:
+            stub = next((x for x in paths if x.endswith("libcuda.so")), paths[0])
+    print("chosen libcuda:", stub)
+    if not stub:
+        print(_out(["find", "/", "-xdev", "-name", "libcuda*"], 60))
+        raise RuntimeError("libcuda not found: is the GPU accelerator on? Paste the lines above.")
     cfg = ["cmake", "-B", "build", "-DGGML_CUDA=ON", "-DCMAKE_CUDA_ARCHITECTURES=75", "-DLLAMA_OPENSSL=OFF"]
     env = dict(os.environ)
     if stub:

@@ -169,3 +169,39 @@ def test_configure_gets_stub_dir_and_runtime_never_does():
         if "LD_LIBRARY_PATH" in line:
             assert "stub" not in line, line
     assert '"stubs" in x' in runtime
+
+
+def test_gpu_assertion_and_ldconfig_listing():
+    env = next(s for s in _codes() if s.startswith("# [2]"))
+    assert '"nvidia-smi", "-L"' in env and "chưa bật GPU" in env
+    assert env.index('"-L"') < env.index('"nvcc"')  # fail fast, before anything else
+    assert "ldconfig" in env and "libcuda" in env
+
+
+def test_libcuda_discovery_order_and_no_truncation():
+    build = next(s for s in _codes() if s.startswith("# [4]"))
+    order = [
+        build.index(k)
+        for k in ('"toolkit stubs"', '"toolkit compat"', '"ldconfig"', '"find"')
+    ]
+    assert order == sorted(order)
+    assert "stubs/libcuda.so*" in build and "compat/libcuda.so*" in build
+    assert "/usr/local/nvidia" in build and "/proc" not in build
+    assert "timeout" in build and "-xdev" in build
+    assert "[:40]" not in build
+    assert "không tìm thấy libcuda" in build
+    # only a stubs path or the private stub dir counts as a runtime leak, not the real driver
+    pkg = next(s for s in _codes() if s.startswith("# [5]"))
+    assert '"stubs" in x' in pkg and "usr/lib" not in pkg
+
+
+def test_parse_ldconfig(helpers):
+    out = (
+        "\tlibcuda.so.1 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libcuda.so.1\n"
+        "\tlibcuda.so (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libcuda.so\n"
+        "\tlibcudart.so.12 (libc6,x86-64) => /usr/local/cuda/lib64/libcudart.so.12\n"
+    )
+    assert helpers["parse_ldconfig"](out) == [
+        "/usr/lib/x86_64-linux-gnu/libcuda.so.1",
+        "/usr/lib/x86_64-linux-gnu/libcuda.so",
+    ]
