@@ -98,7 +98,10 @@ def create_app(
 
     app.add_middleware(GuardMiddleware)
 
-    probe = (0.0, False)  # (monotonic, llm ok): /health không xác thực, cache 5 s để không đốt quota ngrok / llama
+    probe = (
+        0.0,
+        False,
+    )  # (monotonic, llm ok): /health không xác thực, cache 5 s để không đốt quota ngrok / llama
 
     @app.get("/health")
     async def health():
