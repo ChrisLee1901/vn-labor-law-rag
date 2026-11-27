@@ -25,7 +25,7 @@ _spec = importlib.util.spec_from_file_location(
 sse = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sse)
 
-EXPECTED_REGION = "sin1"  # vercel.json: services.api.functions regions
+EXPECTED_REGION = "syd1"  # vercel.json: services.api.functions regions
 UA = {"User-Agent": "spike-vercel-check/1.0"}
 NEXT_MARKERS = ("__next", "/_next/", "__NEXT_DATA__", "self.__next_f")
 SEEN_HEADERS = (
@@ -78,7 +78,7 @@ def is_protected(status, headers, body, base_host):
 
 
 def region_codes(x_vercel_id):
-    """x-vercel-id looks like `sin1::iad1::abc-123-xyz` (format not documented in detail: we keep the raw value too)."""
+    """x-vercel-id looks like `syd1::iad1::abc-123-xyz` (format not documented in detail: we keep the raw value too)."""
     parts = x_vercel_id.split("::")
     return (
         [p for p in parts[:-1] if re.fullmatch(r"[a-z]{3,4}\d", p)]

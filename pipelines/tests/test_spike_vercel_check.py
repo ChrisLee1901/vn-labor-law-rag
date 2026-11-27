@@ -36,7 +36,7 @@ def make_handler(mode, count, interval):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Server", "Vercel")
-            self.send_header("X-Vercel-Id", "sin1::sin1::abc-123")
+            self.send_header("X-Vercel-Id", "syd1::syd1::abc-123")
             for k, v in extra:
                 self.send_header(k, v)
             self.end_headers()
@@ -70,7 +70,7 @@ def make_handler(mode, count, interval):
                         "path": path,
                         "root_path": "",
                         "raw_path": path,
-                        "vercel_region": "iad1" if mode == "region" else "sin1",
+                        "vercel_region": "iad1" if mode == "region" else "syd1",
                         "python": "3.12.1",
                     }
                 ).encode()
@@ -129,9 +129,9 @@ def test_pass_and_facts(serve, capsys):
     assert code == 0, out
     assert "verdict: PASS" in out and "events: 8/8" in out
     assert "fastapi_sees_api_prefix: True" in out
-    assert "function_region: 'sin1' (expected 'sin1': match)" in out
-    assert "x_vercel_id_regions: /=sin1,sin1;" in out
-    assert "x-vercel-id=sin1::sin1::abc-123" in out and "server=" in out
+    assert "function_region: 'syd1' (expected 'syd1': match)" in out
+    assert "x_vercel_id_regions: /=syd1,syd1;" in out
+    assert "x-vercel-id=syd1::syd1::abc-123" in out and "server=" in out
 
 
 def test_protection_page_gives_bypass_hint(serve, capsys):
@@ -196,7 +196,7 @@ def test_check_root_rejects_non_next_html():
 
 
 def test_region_codes():
-    assert chk.region_codes("sin1::iad1::abc-123") == ["sin1", "iad1"]
+    assert chk.region_codes("syd1::iad1::abc-123") == ["syd1", "iad1"]
     assert chk.region_codes("abc-123") == []
     assert chk.region_codes("") == []
 

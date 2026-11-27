@@ -26,12 +26,12 @@ def test_not_mounted_unless_flag_is_exactly_1(monkeypatch, value):
 
 
 def test_ping_reports_path_facts(spike_client, monkeypatch):
-    monkeypatch.setenv("VERCEL_REGION", "sin1")
+    monkeypatch.setenv("VERCEL_REGION", "syd1")
     body = spike_client.get("/api/ping").json()
     assert body["ok"] is True
     assert body["path"] == "/api/ping" and body["raw_path"] == "/api/ping"
     assert body["root_path"] == ""
-    assert body["vercel_region"] == "sin1"
+    assert body["vercel_region"] == "syd1"
     assert body["python"] == "%d.%d.%d" % sys.version_info[:3]
     assert set(body) == {
         "ok",

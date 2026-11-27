@@ -8,7 +8,7 @@ Nguồn Mermaid của sơ đồ trên trang Giới thiệu. Bản vẽ tay, theo
 flowchart LR
     B[Trình duyệt]
 
-    subgraph V["Vercel (sin1)"]
+    subgraph V["Vercel (syd1)"]
         W["Next.js 16 (web)<br/>giao diện, rewrite /api/*"]
         A["FastAPI (api)<br/>truy xuất, prompt, kiểm tra trích dẫn"]
     end

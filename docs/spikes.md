@@ -227,7 +227,7 @@ Mọi trang dưới đây đọc ngày 2026-11-23 (`last_updated` của trang gh
 - **Cron:** `crons` là khóa cấp cao nhất trong [vercel.json](https://vercel.com/docs/project-configuration/vercel-json) và schema; [Cron Jobs](https://vercel.com/docs/schedules/cron-jobs) (2026-09-16) gọi `GET` vào URL production với `path`, và ghi cron là tính năng cũ sẽ chuyển sang "Schedules". Không trang nào nói cron có chạy ở chế độ Services hay không. **Vì vậy `vercel.json` chưa có `crons`** (xem dưới).
 - **CLI trong CI:** [Global options](https://vercel.com/docs/cli/global-options) (2026-11-14): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` đọc từ env, khuyến nghị cho CI vì không lộ token trong argv. [deploy](https://vercel.com/docs/cli/deploy): stdout của `vercel deploy` là URL deployment; `--env KEY=VALUE` đặt env **lúc chạy**, `--build-env` đặt env lúc build; với `--prebuilt` thì System Environment Variables không có lúc build.
 - **Deployment Protection:** [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) (2026-09-16): header (hoặc query) `x-vercel-protection-bypass: <secret>`; secret cũng có trong env `VERCEL_AUTOMATION_BYPASS_SECRET` của deployment.
-- **`x-vercel-id`:** [Response headers](https://vercel.com/docs/headers/response-headers) (2026-08-11) chỉ nói header chứa danh sách region mà request đi qua cùng region function chạy. **Định dạng chính xác không được tài liệu hóa.** Checker tách theo `::` và lấy các mã dạng `sin1`, **luôn in kèm giá trị gốc**; đọc bằng mắt, đừng tin phần tách.
+- **`x-vercel-id`:** [Response headers](https://vercel.com/docs/headers/response-headers) (2026-08-11) chỉ nói header chứa danh sách region mà request đi qua cùng region function chạy. **Định dạng chính xác không được tài liệu hóa.** Checker tách theo `::` và lấy các mã dạng `syd1`, **luôn in kèm giá trị gốc**; đọc bằng mắt, đừng tin phần tách.
 - **Dự phòng (không cần nếu spike đạt):** nếu Services không biểu diễn được thì dùng hai project riêng, hoặc Next.js `rewrites` tới Python Function gốc. Tài liệu hiện có Services nên đã chọn Services.
 
 **JSON schema.** Schema chính thức `https://openapi.vercel.sh/vercel.json` (Draft-04, tải 2026-11-23) **có** `services` (đánh dấu `private: true`; mỗi service: `root` bắt buộc, `framework`, `runtime`, `entrypoint`, `functions`, `headers`, `rewrites`...), `rewrites[].destination` dạng `{"service": ...}`, `git.deploymentEnabled`, `crons`, `regions`; `experimentalServices` vẫn còn. `vercel.json` hiện tại **hợp lệ** theo schema (`uv run --no-project --with jsonschema`; đối chứng âm: thêm khóa lạ vào service, hoặc `maxDuration: 0`, đều bị từ chối). Schema **không** kiểm: khóa `functions` trong service tính từ đâu, region có được nhận khi `--prebuilt`, service có build được trên runner, và ngữ nghĩa lúc chạy nói chung.
@@ -237,11 +237,11 @@ Mọi trang dưới đây đọc ngày 2026-11-23 (`last_updated` của trang gh
 `vercel.json` ở gốc repo (khóa `services`, **không** dùng `experimentalServices`):
 
 - `web`: `root: "frontend/"`, `framework: "nextjs"`.
-- `api`: `root: "backend/"`, `framework: "fastapi"`, `entrypoint: "app.main:app"`, `functions: {"app/main.py": {"maxDuration": 120, "regions": ["sin1"]}}`.
+- `api`: `root: "backend/"`, `framework: "fastapi"`, `entrypoint: "app.main:app"`, `functions: {"app/main.py": {"maxDuration": 120, "regions": ["syd1"]}}`.
 - `rewrites`: `/api/(.*)` sang service `api`; `/(.*)` sang service `web`.
 - `git.deploymentEnabled: false` (tắt Git integration; deploy từ Actions).
 
-Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastAPI trong một project, một domain; (2) `maxDuration: 120` khớp luật của repo (function dừng ở 120 s): ngân sách tổng `CHAT_BUDGET_S = 100` cộng 20 s dư cho khởi động và đóng stream, vẫn dưới trần 300 s của spec; (3) region `sin1` được thử đặt riêng cho `api` vì Supabase ở `ap-southeast-1`, còn `web` ở region mặc định của project (`iad1` với project mới). **Có thể không hợp lệ trên Hobby**: gói này chỉ cho một region ([Configuring regions](https://vercel.com/docs/functions/configuring-functions/region), 2026-08-11: "Hobby: Single region"; deploy quá số region của gói thì lỗi trước bước build), nên hai service ở hai region có thể làm deploy lỗi, hoặc một service chạy sai region. Tài liệu không chứng minh hình dạng hiện tại là sai, nên `vercel.json` giữ nguyên và hai biến thể được thử trong cùng một lần spike (xem cây quyết định). Nếu thật sự chỉ một region: các trang Next SSR như `/van-ban` cũng chạy ở region đó và gọi API qua URL công khai; đo ở lần chạy thật; (4) `api` thuần Python, không `torch` (luật 2). Production **không** đặt `API_ORIGIN` (rewrite `/api` của `next.config` chỉ bật khi có biến này hoặc `next dev`); đừng đặt nó cho Preview của spike.
+Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastAPI trong một project, một domain; (2) `maxDuration: 120` khớp luật của repo (function dừng ở 120 s): ngân sách tổng `CHAT_BUDGET_S = 100` cộng 20 s dư cho khởi động và đóng stream, vẫn dưới trần 300 s của spec; (3) region `syd1` được thử đặt riêng cho `api` vì Supabase ở `ap-southeast-2`, còn `web` ở region mặc định của project (`iad1` với project mới). **Có thể không hợp lệ trên Hobby**: gói này chỉ cho một region ([Configuring regions](https://vercel.com/docs/functions/configuring-functions/region), 2026-08-11: "Hobby: Single region"; deploy quá số region của gói thì lỗi trước bước build), nên hai service ở hai region có thể làm deploy lỗi, hoặc một service chạy sai region. Tài liệu không chứng minh hình dạng hiện tại là sai, nên `vercel.json` giữ nguyên và hai biến thể được thử trong cùng một lần spike (xem cây quyết định). Nếu thật sự chỉ một region: các trang Next SSR như `/van-ban` cũng chạy ở region đó và gọi API qua URL công khai; đo ở lần chạy thật; (4) `api` thuần Python, không `torch` (luật 2). Production **không** đặt `API_ORIGIN` (rewrite `/api` của `next.config` chỉ bật khi có biến này hoặc `next dev`); đừng đặt nó cho Preview của spike.
 
 **Chưa có `crons`.** Tài liệu không nói cron cấp cao nhất có chạy với Services hay không, nên không thêm. Snippet và quy trình ở [deploy.md](deploy.md) mục Keep-alive giữ nguyên. Nếu spike đạt: thêm snippet đó, deploy lại và xem Project, Settings, Cron Jobs có hiện job không; không hiện thì chỉ dựa vào GitHub schedule và ghi vào đây.
 
@@ -253,7 +253,7 @@ Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastA
 4. `vercel deploy --env ENABLE_SPIKE_ENDPOINTS=1` có tới runtime của service khi dùng `--prebuilt`. Không tới thì `/api/ping` trả 404 JSON (checker nhận ra: "FastAPI trả lời nhưng không có route"); khi đó đặt biến cho Preview trong dashboard rồi chạy lại.
 5. Định dạng `x-vercel-id` và chỗ nó cho biết region của function.
 6. Cron ở chế độ Services (xem trên).
-7. **Hobby chỉ cho một region** ([Configuring regions](https://vercel.com/docs/functions/configuring-functions/region), 2026-08-11): `api` ghim `sin1` theo từng hàm còn `web` ở mặc định `iad1` thì deploy có thể lỗi vì số region, hoặc một service chạy sai region. Chưa rõ Vercel đếm region thế nào khi có `services`.
+7. **Hobby chỉ cho một region** ([Configuring regions](https://vercel.com/docs/functions/configuring-functions/region), 2026-08-11): `api` ghim `syd1` theo từng hàm còn `web` ở mặc định `iad1` thì deploy có thể lỗi vì số region, hoặc một service chạy sai region. Chưa rõ Vercel đếm region thế nào khi có `services`.
 
 ### Cách chạy (khớp [user-checklist.md](user-checklist.md) giai đoạn E)
 
@@ -279,7 +279,7 @@ Checker in `PASS` khi **tất cả** đúng:
 - `/api/ping` trả JSON `ok: true` và FastAPI thấy `path == "/api/ping"`.
 - `/api/sse` trả 200 `text/event-stream`, đủ **30 event** đúng thứ tự, có `event: done`, không dồn cục (cùng ngưỡng spike 0.3: p95 khoảng cách trong [0,5 s; 2 s], không quá 3 event cách nhau dưới 50 ms, khoảng cách dài nhất tối đa 5 s).
 
-Ghi thêm (không làm FAIL): FastAPI nhận path có `/api` hay không (`fastapi_sees_api_prefix`), region của function (`function_region` so với `sin1`, kèm `x_vercel_id_regions`), header `server`, `cache-control`, `x-vercel-cache`, `x-vercel-id`. "Chỗ đặt `maxDuration`" trả lời bằng `vercel.json` (trong service `api`, khóa `functions`) cộng bước 6.
+Ghi thêm (không làm FAIL): FastAPI nhận path có `/api` hay không (`fastapi_sees_api_prefix`), region của function (`function_region` so với `syd1`, kèm `x_vercel_id_regions`), header `server`, `cache-control`, `x-vercel-cache`, `x-vercel-id`. "Chỗ đặt `maxDuration`" trả lời bằng `vercel.json` (trong service `api`, khóa `functions`) cộng bước 6.
 
 Deployment Protection chặn (401 HTML "Authentication Required", hoặc redirect tới vercel.com): checker dừng sớm, in `protection: BLOCKED` và hướng dẫn dùng `--bypass-env`.
 
@@ -295,7 +295,7 @@ Deployment Protection chặn (401 HTML "Authentication Required", hoặc redirec
 | `/`: status, content-type | TBD — chờ chạy |
 | `/api/ping`: status và `ping_facts` (`path`, `root_path`, `raw_path`, `python`) | TBD — chờ chạy |
 | `fastapi_sees_api_prefix` | TBD — chờ chạy |
-| `function_region` (mong đợi `sin1`) và `x_vercel_id_regions` | TBD — chờ chạy |
+| `function_region` (mong đợi `syd1`) và `x_vercel_id_regions` | TBD — chờ chạy |
 | Giá trị thô `x-vercel-id` | TBD — chờ chạy |
 | `/api/sse`: `events` (x/30), `done_event`, `cut` | TBD — chờ chạy |
 | `wall_time_s`, inter-arrival min/median/p95/max, `clumped_events` | TBD — chờ chạy |
@@ -312,7 +312,7 @@ Deployment Protection chặn (401 HTML "Authentication Required", hoặc redirec
 - **`path` là `/ping` (tiền tố bị cắt):** trái với tài liệu. Ghi lại và báo trước khi sửa route, vì mọi route trong `backend/app/api/*` khai báo `/api/...`.
 - **`/api/sse` dồn cục hoặc bị cắt:** ghi số event và giây bị cắt. Đây là lỗi ảnh hưởng chat, **không tự đổi**, báo lại.
 - **`--prebuilt` không hỗ trợ Services:** chuyển sang Vercel Git integration theo [deploy.md](deploy.md) mục "Phương án dự phòng" (các bước đã ghi ở đó, không lặp lại). Ghi ADR và sửa `ci.yml`, `deploy.yml` chỉ **sau khi bạn báo kết quả**; chưa có ADR nào.
-- **Region không phải `sin1`, hoặc deploy lỗi vì số region:** Hobby chỉ cho 1 region: nếu deploy lỗi vì số region, đặt Project → Settings → Functions → Function Region = `sin1` (đặt cho cả project, cả `web` lẫn `api`) và xóa `regions` khỏi `functions` trong `vercel.json`; thử cả hai biến thể (giữ `regions` trong `functions`, và đặt ở cấp project) trong cùng một lần spike. Ghi giá trị region thật, nơi đã cấu hình và biến thể nào chạy được; fallback của repo là `iad1`.
+- **Region không phải `syd1`, hoặc deploy lỗi vì số region:** Hobby chỉ cho 1 region: nếu deploy lỗi vì số region, đặt Project → Settings → Functions → Function Region = `syd1` (đặt cho cả project, cả `web` lẫn `api`) và xóa `regions` khỏi `functions` trong `vercel.json`; thử cả hai biến thể (giữ `regions` trong `functions`, và đặt ở cấp project) trong cùng một lần spike. Ghi giá trị region thật, nơi đã cấu hình và biến thể nào chạy được; fallback của repo là `iad1`.
 
 ### Kiểm tra AI SDK v7 (mục cuối của plan Task 0.4)
 

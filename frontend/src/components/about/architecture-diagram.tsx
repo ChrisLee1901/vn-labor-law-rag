@@ -44,7 +44,7 @@ export function ArchitectureDiagram() {
 
         <rect x={210} y={20} width={260} height={190} rx={8} className={`fill-none stroke-input ${dash}`} strokeWidth={1.5} />
         <text x={224} y={42} className={sub}>
-          Vercel (sin1)
+          Vercel (syd1)
         </text>
         <rect x={16} y={310} width={504} height={140} rx={8} className={`fill-none stroke-input ${dash}`} strokeWidth={1.5} />
         <text x={28} y={330} className={sub}>

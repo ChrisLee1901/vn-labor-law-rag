@@ -51,14 +51,16 @@ Lưu vector: **Supabase pgvector** (dữ liệu bền, mở bảng cho người 
 Trình duyệt ── Next.js 16 (Vercel, service "web")
                  │  /api/* (rewrite, cùng domain)
                  ▼
-             FastAPI (Vercel Python, service "api", sin1)
-               ├── Supabase Postgres (ap-southeast-1): legal_docs, chunks (halfvec 1024 + tsvector),
+             FastAPI (Vercel Python, service "api", syd1)
+               ├── Supabase Postgres (ap-southeast-2, Sydney): legal_docs, chunks (halfvec 1024 + tsvector),
                │     legal_refs, app_config, feedback, canned_answers; hàm hybrid_search (RRF)
                └── httpx ──► ngrok domain tĩnh ──► Kaggle notebook (T4 x2)
                                gateway FastAPI (bearer): /health, /v1/embeddings, /v1/rerank,
                                proxy SSE /v1/chat/completions ──► llama-server (GPU0)
                                embedder + reranker fp16 (GPU1)
 ```
+
+Region: chọn Sydney (`ap-southeast-2` cho Supabase, `syd1` cho function Vercel) vì project Supabase của chủ dự án nằm ở đó và các vòng gọi DB (~7 lần mỗi lượt chat) quyết định độ trễ.
 
 ### 6.2 Luồng một câu hỏi (online)
 

@@ -16,9 +16,9 @@
 - `backend/` chỉ có runtime deps nhẹ: `fastapi`, `httpx`, `psycopg[binary]`, `pydantic`, `langfuse`. Cấm `torch`, `transformers`, `sentence-transformers`, `langchain`, `llama-index`. Bundle Python ≤ 500 MB.
 - Python 3.12, quản lý bằng uv (`uv.lock` commit). Node 24, pnpm.
 - Chuẩn hóa Unicode NFC ở **cả ingest lẫn query**.
-- Supabase: **1 project** (`ap-southeast-1`). Migration chỉ additive. Re-ingest ghi vào `index_version` mới, chuyển bằng `app_config.active_index_version`.
+- Supabase: **1 project** (`ap-southeast-2`). Migration chỉ additive. Re-ingest ghi vào `index_version` mới, chuyển bằng `app_config.active_index_version`.
 - Kết nối DB từ Vercel qua pooler transaction mode, cổng **6543**, `prepare_threshold=None`, pool size 1.
-- Function Vercel: region `sin1` (fallback `iad1`), `maxDuration` 120 s. Mọi call httpx tới gateway có timeout: connect 3 s, read 60 s.
+- Function Vercel: region `syd1` (fallback `iad1`), `maxDuration` 120 s. Mọi call httpx tới gateway có timeout: connect 3 s, read 60 s.
 - `LLM_BASE_URL` phải khớp `^https://[a-z0-9-]+\.ngrok-free\.(app|dev)$`, ngược lại coi như offline (chống SSRF).
 - Gateway Kaggle: mọi route trừ `/health` đòi `Authorization: Bearer <GATEWAY_API_KEY>`, so sánh hằng thời gian (`hmac.compare_digest`).
 - Mã văn bản cố định: `BLLD` (VBHN 18/VBHN-VPQH – BLLĐ 45/2019/QH14), `ND145-2020`, `ND293-2025`, `ND399-2026`, `LBHXH-2024` (41/2024/QH15), `ND158-2025`, `LVL-2025` (74/2025/QH15), `ND374-2025`.
@@ -145,13 +145,13 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 - [x] FastAPI: `GET /api/ping` trả `{"ok": true}`, và `GET /api/sse` stream 30 event mỗi 1 giây. — *đã viết + test local: backend/app/api/spike.py, chỉ mount khi ENABLE_SPIKE_ENDPOINTS=1; /api/ping trả thêm path/root_path để trả lời câu hỏi tiền tố /api*
 - [ ] `[USER]` Tạo project Vercel, lấy `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` và đưa vào GitHub Secrets. — *chờ [USER]*
 - [x] Workflow chạy `vercel pull --yes --environment=preview`, rồi `vercel build`, rồi `vercel deploy --prebuilt`. — *đã viết: .github/workflows/spike-deploy.yml (actionlint sạch) + scripts/spike_vercel_check.py; chưa chạy trên Vercel thật*
-- [ ] **Đạt** khi URL preview có: `/` render Next.js, `/api/ping` ok, `/api/sse` stream từng event (`curl -N`). Ghi thêm: FastAPI nhận path có `/api` hay đã bị cắt, chỗ đặt `maxDuration` và region `sin1` có nhận không. — *chờ live batch: cần project Vercel thật*
+- [ ] **Đạt** khi URL preview có: `/` render Next.js, `/api/ping` ok, `/api/sse` stream từng event (`curl -N`). Ghi thêm: FastAPI nhận path có `/api` hay đã bị cắt, chỗ đặt `maxDuration` và region `syd1` có nhận không. — *chờ live batch: cần project Vercel thật*
 - [ ] Nếu `--prebuilt` không hỗ trợ Services: chuyển sang Vercel Git integration, ghi ADR, và sửa Task 6.3 theo hướng đó. — *chờ live batch: cần project Vercel thật*
 - [ ] Kiểm tra AI SDK v7: tên field của `source-url`, `data-*`, `error`, và header `x-vercel-ai-ui-message-stream`. Ghi vào spikes để Task 4.3 dùng. — *đã làm phần local: đã kiểm tra field qua docs trực tuyến ở Task 4.2 (docs/ai-sdk-protocol.md); còn lại: chưa ghi docs/spikes.md, chưa thử trên Vercel thật*
 
 ### Task 0.5: Spike Supabase
 
-- [ ] `[USER]` Tạo project Supabase region `ap-southeast-1`, lấy connection string của pooler (cổng 6543) và service key. — *chờ [USER]*
+- [ ] `[USER]` Tạo project Supabase region `ap-southeast-2`, lấy connection string của pooler (cổng 6543) và service key. — *chờ [USER]*
 - [ ] Chạy `create extension if not exists vector; select extversion from pg_extension where extname='vector';` rồi ghi version. Nếu ≥ 0.8.0 thì có iterative scan. — *chờ live batch: cần project Supabase thật*
 - [ ] Từ function `/api/ping` của Task 0.4, chạy `select 1` qua psycopg với `prepare_threshold=None`. **Đạt** khi trả về trong < 1 s ở lần gọi nóng. — *chờ live batch: cần project Supabase thật*
 - [ ] Viết `docs/spikes.md` tổng kết cả 4 spike, rồi commit `docs: phase 0 spike results`. — *chờ live batch: cần project Supabase thật*

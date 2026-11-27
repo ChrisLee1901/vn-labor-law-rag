@@ -97,7 +97,7 @@ Tạo theo thứ tự này. Lưu mọi giá trị vào trình quản lý mật k
 | 2 | Hugging Face | Settings, Access Tokens, loại **Read** | `HF_TOKEN` | Kaggle Secrets | có |
 | 3 | ngrok | Lấy authtoken. Dashboard, Domains, claim **1 dev domain tĩnh** `<ten>.ngrok-free.dev` | `NGROK_AUTHTOKEN`, `NGROK_DOMAIN` (không kèm `https://`) | Kaggle Secrets | có |
 | 4 | Chuỗi gateway key | Tự sinh chuỗi ngẫu nhiên dài, ví dụ `python -c "import secrets;print(secrets.token_urlsafe(48))"` | `GATEWAY_API_KEY` (Kaggle) và `LLM_API_KEY` (Vercel, và env local khi chạy lệnh): **cùng giá trị** | Kaggle Secrets + Vercel env | có |
-| 5 | Supabase | Project mới, region **ap-southeast-1** (Singapore). Lưu mật khẩu DB. Connect, **Transaction pooler** cổng 6543 | `DATABASE_URL`; `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`; Account, Access Tokens: `SUPABASE_ACCESS_TOKEN` | Vercel env (`DATABASE_URL`); GitHub Environment `production` (3 secret Supabase) | có |
+| 5 | Supabase | Project mới, region **ap-southeast-2** (Sydney). Lưu mật khẩu DB. Connect, **Transaction pooler** cổng 6543 | `DATABASE_URL`; `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`; Account, Access Tokens: `SUPABASE_ACCESS_TOKEN` | Vercel env (`DATABASE_URL`); GitHub Environment `production` (3 secret Supabase) | có |
 | 6 | Vercel | Hobby, đăng nhập bằng GitHub. Account Settings, Tokens: tạo token riêng cho project này | `VERCEL_TOKEN` | GitHub Secrets cấp repo | có |
 | 7 | Upstash | Redis free | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Vercel env | tùy chọn (thiếu thì backend không giới hạn tần suất; nên có trước khi công khai) |
 | 8 | Langfuse Cloud | Hobby. Chọn vùng; project mới; lấy khóa | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` (ví dụ `https://cloud.langfuse.com`, đúng vùng) | Vercel env | tùy chọn (thiếu thì tracing tắt, app vẫn chạy); cần cho Giai đoạn H |
@@ -110,7 +110,7 @@ Biến không bí mật đặt ở GitHub, Settings, Secrets and variables, **Va
 
 **Nếu lỗi:** ngrok chỉ cho 1 domain tĩnh miễn phí; domain phải khớp `^https://[a-z0-9-]+\.ngrok-free\.(app|dev)$` (backend chặn SSRF bằng regex này), domain `.ngrok-free.dev` hợp lệ. Kaggle không cho bật Internet nếu chưa xác minh điện thoại.
 
-**Gửi lại cho trợ lý:** chỉ cần ghi "Giai đoạn B xong" kèm: tên domain ngrok (công khai, ví dụ `abc-def.ngrok-free.dev`), region Supabase (ap-southeast-1?), vùng Langfuse (EU/US), mục nào bỏ qua (Upstash? Langfuse?). **Không** gửi khóa.
+**Gửi lại cho trợ lý:** chỉ cần ghi "Giai đoạn B xong" kèm: tên domain ngrok (công khai, ví dụ `abc-def.ngrok-free.dev`), region Supabase (ap-southeast-2?), vùng Langfuse (EU/US), mục nào bỏ qua (Upstash? Langfuse?). **Không** gửi khóa.
 
 ---
 
@@ -193,7 +193,7 @@ Chưa cần Kaggle.
    export DATABASE_URL='<chuỗi pooler cổng 6543>'
    python -c "import os,time,psycopg;c=psycopg.connect(os.environ['DATABASE_URL'],prepare_threshold=None);t=time.time();c.execute('select 1');t=time.time()-t;t2=time.time();c.execute('select 1');print('lan1',round(t,3),'lan2 (nong)',round(time.time()-t2,3))"
    ```
-   (Từ máy bạn ở Việt Nam, số này không đại diện Vercel `sin1`; số đo đúng từ function Vercel sẽ lấy ở Giai đoạn E/G qua `/api/health`.)
+   (Từ máy bạn ở Việt Nam, số này không đại diện Vercel `syd1`; số đo đúng từ function Vercel sẽ lấy ở Giai đoạn E/G qua `/api/health`.)
 4. **Áp migration lần đầu thủ công, không để CI làm**:
    ```bash
    supabase login                                  # trình duyệt, không dán token vào chat
@@ -234,17 +234,17 @@ Phần bạn làm:
    - `/` hiển thị trang Next.js.
    - `/api/ping` trả `{"ok": true, ...}` kèm `path`, `root_path`, `raw_path`, `vercel_region` (chưa có `select 1`, việc của Task 0.5).
    - `curl -N https://<preview>/api/sse` nhận từng event cách nhau ~1 giây (không dồn cục).
-   - Checker in: FastAPI nhận path **có** `/api` hay đã bị cắt, region của function so với `sin1`. Tự ghi thêm từ dashboard (Deployment, Functions): `maxDuration` và region hiển thị. Header `x-vercel-ai-ui-message-stream` không kiểm ở spike này (`/api/chat` cần DB và LLM): kiểm ở lần deploy thật đầu tiên.
+   - Checker in: FastAPI nhận path **có** `/api` hay đã bị cắt, region của function so với `syd1`. Tự ghi thêm từ dashboard (Deployment, Functions): `maxDuration` và region hiển thị. Header `x-vercel-ai-ui-message-stream` không kiểm ở spike này (`/api/chat` cần DB và LLM): kiểm ở lần deploy thật đầu tiên.
 6. Nếu `--prebuilt` không hỗ trợ Services: dùng phương án dự phòng (Vercel Git integration) trong [deploy.md](deploy.md) mục "Phương án dự phòng". Trợ lý sẽ ghi ADR và sửa `ci.yml`, `deploy.yml`.
 
 **Dấu hiệu thành công:** ba mục `/`, `/api/ping`, `/api/sse` đạt trên URL preview, và `vercel deploy --prebuilt` không báo lỗi Services.
 
-**Nếu lỗi:** `vercel build` thiếu Python hoặc `uv`: thêm `astral-sh/setup-uv` vào job (đã dự đoán trong deploy.md). `/api/*` trả 404 hoặc vào nhầm Next.js: sai rewrite, gửi `vercel.json` và log `vercel build`. `/api/sse` dồn cục: ghi lại, đây là lỗi ảnh hưởng chat; không tự đổi. Checker báo `/api/ping returned HTTP 404 JSON: FastAPI answered but the route is absent, so ENABLE_SPIKE_ENDPOINTS=1 did not reach the function` (cờ chưa tới runtime; việc workflow "tự truyền" biến này qua `--env` + `--prebuilt` + Services là **chưa xác minh**): đặt `ENABLE_SPIKE_ENDPOINTS=1` cho môi trường Preview trong Vercel (Project, Settings, Environment Variables) rồi chạy lại workflow (xem [spikes.md](spikes.md#vercel), mục "Điều chưa xác minh" số 4). Deploy lỗi vì số region: Hobby chỉ cho 1 region, đặt Project, Settings, Functions, Function Region = `sin1` cho cả project và xóa `regions` khỏi `functions` trong `vercel.json`; thử cả hai biến thể trong cùng một lần spike và báo biến thể nào chạy được.
+**Nếu lỗi:** `vercel build` thiếu Python hoặc `uv`: thêm `astral-sh/setup-uv` vào job (đã dự đoán trong deploy.md). `/api/*` trả 404 hoặc vào nhầm Next.js: sai rewrite, gửi `vercel.json` và log `vercel build`. `/api/sse` dồn cục: ghi lại, đây là lỗi ảnh hưởng chat; không tự đổi. Checker báo `/api/ping returned HTTP 404 JSON: FastAPI answered but the route is absent, so ENABLE_SPIKE_ENDPOINTS=1 did not reach the function` (cờ chưa tới runtime; việc workflow "tự truyền" biến này qua `--env` + `--prebuilt` + Services là **chưa xác minh**): đặt `ENABLE_SPIKE_ENDPOINTS=1` cho môi trường Preview trong Vercel (Project, Settings, Environment Variables) rồi chạy lại workflow (xem [spikes.md](spikes.md#vercel), mục "Điều chưa xác minh" số 4). Deploy lỗi vì số region: Hobby chỉ cho 1 region, đặt Project, Settings, Functions, Function Region = `syd1` cho cả project và xóa `regions` khỏi `functions` trong `vercel.json`; thử cả hai biến thể trong cùng một lần spike và báo biến thể nào chạy được.
 
 **Gửi lại cho trợ lý** (task 0.4, 0.5, 6.5 cron, một phần 6.3):
 
 - Kết quả từng URL: `/` có render không; `/api/ping` nội dung; `/api/sse` có stream từng event không (số event và có dồn cục không).
-- FastAPI thấy path có `/api` hay không; `maxDuration` đặt chỗ nào; region `sin1` nhận hay không.
+- FastAPI thấy path có `/api` hay không; `maxDuration` đặt chỗ nào; region `syd1` nhận hay không.
 - Header `x-vercel-ai-ui-message-stream`: để lần deploy thật đầu tiên (không thuộc spike này).
 - Thời gian `select 1` từ function Vercel (lần nóng): thuộc Task 0.5, chưa có trong `/api/ping` của spike này.
 - `--prebuilt` hỗ trợ Services: có/không, kèm thông báo lỗi (nếu có).
