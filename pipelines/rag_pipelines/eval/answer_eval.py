@@ -504,7 +504,7 @@ def run(
         if n and delay_s:
             sleep(delay_s)
         r = ask(client, base_url, it, sleep=sleep, now=now)
-        if r.ok and r.mode == "offline":
+        if r.ok and (r.mode == "offline" or r.llm != "online"):
             raise Aborted(
                 f"LLM chuyển sang offline giữa chừng ({it.id}): dừng, số liệu không còn đo mô hình"
             )

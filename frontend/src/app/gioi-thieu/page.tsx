@@ -103,6 +103,7 @@ export default function AboutPage() {
         <List>
           <li>Văn bản được tải một lần, không tự cập nhật, nên có thể đã lỗi thời. Hãy đối chiếu bản chính thức trên Công báo.</li>
           <li>Bộ luật Lao động đang chờ sửa đổi, nội dung có thể thay đổi. Nghị định 399/2026 chưa có hiệu lực tại thời điểm viết, hệ thống phân biệt theo ngày hỏi nhưng chỉ cho các văn bản trong kho.</li>
+          <li>Kho chưa có phụ lục danh mục địa bàn vùng I-IV của Nghị định 399/2026 (bản đã công bố chỉ có phần thân). Từ 01/01/2027 hệ thống chưa tra được địa bàn thuộc vùng nào, hãy xem phụ lục trên Công báo.</li>
           <li>Đây là thông tin tham khảo, không phải tư vấn pháp lý.</li>
           <li>Mô hình ngôn ngữ có thể sai, kể cả khi có trích dẫn. Hãy bấm vào nguồn và đọc lại điều luật.</li>
           <li>Bộ câu hỏi vàng do Claude sinh và kiểm chéo, có thể chung thiên lệch và chưa phải nhãn của chuyên gia luật. Bộ chỉ có 120 câu trên 8 văn bản, nên chênh lệch nhỏ giữa các chế độ có thể không có ý nghĩa.</li>

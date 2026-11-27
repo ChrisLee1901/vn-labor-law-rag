@@ -53,10 +53,11 @@ def lines(
     finish=True,
     done=True,
     split_text=True,
+    llm="online",
 ):
     out = [
         part({"type": "start", "messageId": "m1"}),
-        part({"type": "data-status", "data": {"llm": "online", "mode": mode}}),
+        part({"type": "data-status", "data": {"llm": llm, "mode": mode}}),
     ]
     out += [
         part({"type": "source-url", "sourceId": s, "url": u, "title": "t"})
@@ -426,6 +427,11 @@ def test_run_aborts_when_llm_goes_offline_or_backend_is_down():
     off = {"câu hỏi a": lines(mode="offline", text="Mô hình đang ngoại tuyến.")}
     with pytest.raises(ae.Aborted, match="offline"):
         run_with(items, off)
+    down = {
+        "câu hỏi a": lines(llm="offline", text="FTS-only [S1]")
+    }  # mode rag nhưng LLM đã tắt
+    with pytest.raises(ae.Aborted, match="offline"):
+        run_with(items, down)
     many = [
         gi(f"q{i}", "single", ["BLLD:D25"]) for i in range(ae.MAX_CONSECUTIVE_FAILURES)
     ]

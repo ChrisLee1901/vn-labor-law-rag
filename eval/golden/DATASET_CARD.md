@@ -62,6 +62,8 @@ Từ 153 câu đạt luật giữ, chọn 120 theo quota (các câu thừa khôn
 - Câu temporal phụ thuộc ND399-2026 (chưa có hiệu lực, hiệu lực 2027-01-01): nếu văn bản được sửa/hoãn trước ngày đó thì đáp án có thể lệch.
 - Quy tắc giữ chỉ yêu cầu gold giao nhau >= 1 id, không so khớp văn bản đáp án của verifier với đáp án ứng viên.
 - Id điểm của khoản không số (điểm đứng trước mọi khoản) không có dạng hợp lệ `D:K:p`; gold của các trường hợp đó ở cấp Điều.
+- Phụ lục địa bàn (vùng I-IV) của ND399-2026 không có trong corpus: file PDF trên datafiles.chinhphu.vn chỉ có phần thân (4 trang, kết thúc ở chữ ký), Công báo chưa đăng văn bản này (kiểm tra 2026-11-27). Không câu nào trong bộ này cần danh mục địa bàn của ND399. Khi Công báo đăng bản đầy đủ, thêm vào `legal_docs.yaml` (`keep_appendix: true`) và ingest `--index-version` mới.
+- q004 (test) và q087 (test) từng có gold nằm ngoài cửa sổ `as_of` của câu (ND293-2025:D5:K1 tại 2027-02-01; ND399-2026:D3:K1 tại 2026-12-15) nên recall tối đa 0.5 ở mọi chế độ. Đã bỏ id ngoài cửa sổ khỏi `gold` (trường `answer` vẫn nêu cả hai năm). Số câu và split không đổi.
 - Corpus chỉ 8 văn bản; câu "ngoài phạm vi" chỉ đại diện, không phủ hết miền ngoài.
 
 ## Chấm câu trả lời (`answer_eval`) và giới hạn của nhãn

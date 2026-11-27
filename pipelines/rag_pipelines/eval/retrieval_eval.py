@@ -25,7 +25,8 @@ import numpy as np
 import psycopg
 from app.legal.normalize import strip_diacritics
 from app.llm.gateway import Gateway, LLMOffline
-from app.retrieval.search import CANDIDATES, _by_rrf, _hybrid, retrieve
+import app.retrieval.search as backend_search
+from app.retrieval.search import CANDIDATES, EMBED_DIM, _by_rrf, _hybrid, retrieve
 from app.retrieval.tsquery import build_tsquery
 from psycopg import AsyncConnection
 from ranx import Qrels, Run, evaluate
@@ -173,23 +174,46 @@ class GatewayLost(RuntimeError):
     """Gateway sập giữa lúc eval hybrid_rerank (`retrieve` sẽ lặng lẽ rơi về FTS nên phải dừng thay vì ghi số sai)."""
 
 
+EVAL_STEP_TIMEOUT_S = 120.0  # backend dùng 8 s rồi nuốt TimeoutError; eval chấp nhận chậm hơn nhưng không được rơi về FTS
+
+
 class StrictGateway(Gateway):
+    """Mọi lỗi gateway (mạng, phản hồi sai dạng, embedding sai chiều) thành GatewayLost thay vì LLMOffline mà `retrieve` nuốt."""
+
     async def _post(self, path: str, body: dict) -> dict:
         try:
             return await super()._post(path, body)
         except LLMOffline as e:
             raise GatewayLost(f"gateway offline during hybrid_rerank eval: {e}") from e
 
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        try:
+            vecs = await super().embed(texts)
+        except LLMOffline as e:
+            raise GatewayLost(f"bad embeddings response during eval: {e}") from e
+        if any(len(v) != EMBED_DIM for v in vecs):
+            raise GatewayLost("embedding dimension mismatch during eval")
+        return vecs
+
+    async def rerank(
+        self, query: str, docs: list[str], top_n: int
+    ) -> list[tuple[int, float]]:
+        try:
+            return await super().rerank(query, docs, top_n)
+        except LLMOffline as e:
+            raise GatewayLost(f"bad rerank response during eval: {e}") from e
+
 
 async def _dense(
     conn, question: str, as_of: date, version: int, vec: list[float]
 ) -> list[tuple[str, str, float]]:
     qe = "[" + ",".join(map(str, vec)) + "]"
+    tq = build_tsquery(question)
     cur = await conn.execute(
         "select id, parent_id, score from hybrid_search(%s::text, %s::text, %s::halfvec, %s, %s::date, %s, 0, 1)",
         (
-            build_tsquery(question),
-            build_tsquery(strip_diacritics(question)),
+            tq,
+            strip_diacritics(tq) if tq else None,
             qe,
             version,
             as_of,
@@ -232,6 +256,9 @@ async def run_modes(
     gw: Gateway | None,
 ) -> dict[str, dict[str, list[str]]]:
     out: dict[str, dict[str, list[str]]] = {m: {} for m in modes}
+    backend_search.EMBED_TIMEOUT_S = backend_search.RERANK_TIMEOUT_S = (
+        EVAL_STEP_TIMEOUT_S
+    )
     async with await AsyncConnection.connect(db_url, autocommit=True) as conn:
         for m in modes:
             for it in items:

@@ -268,3 +268,47 @@ def test_cli_no_items_is_clear_error(tmp_path, capsys):
     )
     assert re_.main(["--index", "unused.parquet", "--golden", str(golden)]) == 2
     assert "no golden items" in capsys.readouterr().err
+
+
+def test_strict_gateway_turns_malformed_responses_into_gateway_lost():
+    import httpx
+    from rag_pipelines.eval import retrieval_eval as re_
+
+    payload: dict = {}
+
+    def gw_for(p):
+        payload.clear()
+        payload.update(p)
+        return StrictGateway(
+            "https://abc-12.ngrok-free.app",
+            "k",
+            client=httpx.AsyncClient(
+                transport=httpx.MockTransport(
+                    lambda r: httpx.Response(200, json=payload)
+                )
+            ),
+        )
+
+    async def go(_path, p, call):
+        await call(gw_for(p))
+
+    with pytest.raises(GatewayLost):  # thiếu "results" -> LLMOffline trong Gateway
+        run_async(go("/v1/rerank", {}, lambda gw: gw.rerank("q", ["a"], 1)))
+    with pytest.raises(GatewayLost):  # sai chiều
+        run_async(
+            go(
+                "/v1/embeddings",
+                {"data": [{"index": 0, "embedding": [0.1] * 3}]},
+                lambda gw: gw.embed(["q"]),
+            )
+        )
+    assert re_.EVAL_STEP_TIMEOUT_S >= 120
+
+
+def test_run_modes_lifts_backend_step_timeouts(conn, db_url, tiny):
+    import app.retrieval.search as bs
+
+    load_frozen(tiny[0], conn)
+    it = item("q1", "trả lương", ["ND145-2020:D2"])
+    run_async(run_modes(db_url, 2, [it], ["fts"], {}, None))
+    assert bs.EMBED_TIMEOUT_S >= 120 and bs.RERANK_TIMEOUT_S >= 120

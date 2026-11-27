@@ -62,6 +62,8 @@ docs:
     amends: []
     source_url: https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/11/399_2026_nd-cp_02112026_6-signed.signed.pdf
     page: null  # chưa có trang Công báo; chỉ có PDF trên datafiles
+    # Thiếu phụ lục địa bàn vùng I-IV (PDF datafiles chỉ có phần thân, 4 trang; Công báo chưa đăng, kiểm tra 2026-11-27).
+    # Khi có bản đầy đủ: thêm file vào `files`, đặt `keep_appendix: true`, ingest --index-version mới (xem DATASET_CARD).
     files:
       - https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/11/399_2026_nd-cp_02112026_6-signed.signed.pdf
 
