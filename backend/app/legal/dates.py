@@ -11,10 +11,12 @@ _LONG = re.compile(r"\b(\d{1,2})\s+thang\s+(\d{1,2})\s+nam\s+(\d{4})\b")
 _MONTH = re.compile(r"\bthang\s+(\d{1,2})\s*(?:/|\s+nam\s+)(\d{4})\b")
 _YEAR = re.compile(r"\bnam\s+(\d{4})\b")
 # "Luật BHXH năm 2014" là tên văn bản: "luật" (không phải "pháp luật") cách "năm" tối đa 25 ký tự, không ngắt mệnh đề.
-_LAW_BEFORE = re.compile(r"(?<!phap )\b(?:luat|nghi dinh|thong tu)\b[^,;.]{0,25}$")
+_LAW_BEFORE = re.compile(
+    r"(?<!phap )(?:\bluat\b|\b(?:nghi dinh|thong tu)\s+(?:so\s+)?\d)[^,;.]{0,25}$"
+)
 # Ngày ban hành ngay sau số hiệu ("145/2020/NĐ-CP ngày 14/12/2020") không phải ngày tra cứu.
 _CITED = re.compile(
-    r"\d+/\d{4}/[a-zđ-]+[\s,]*(?:ngay\s*)?"
+    r"\d+/\d{4}/[a-zđ0-9-]+[\s,]*(?:ngay\s*)?"
     r"(?:\d{1,2}[/.-]\d{1,2}[/.-]\d{4}|\d{1,2}\s+thang\s+\d{1,2}\s+nam\s+\d{4})"
 )
 

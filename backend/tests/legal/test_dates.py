@@ -53,12 +53,20 @@ def test_other_date_formats():
     assert extract_as_of("Nghị định 145/2020/NĐ-CP quy định gì", T) == T
 
 
+def test_target_year_after_decree_keyword_is_kept():
+    assert extract_as_of(
+        "Mức lương tối thiểu theo nghị định năm 2027 là bao nhiêu?", T
+    ) == date(2027, 1, 1)
+
+
 def test_document_citation_date_is_not_as_of():
     for q in (
         "Nghị định 145/2020/NĐ-CP ngày 14/12/2020 quy định gì",
         "Nghị định 145 năm 2020 quy định gì",
         "Nghị định 293/2025/NĐ-CP ngày 10 tháng 11 năm 2025 quy định gì",
         "Thông tư 10 năm 2020 hướng dẫn gì",
+        "Bộ luật Lao động số 45/2019/QH14 ngày 20/11/2019 quy định thử việc?",
+        "Luật BHXH 41/2024/QH15 ngày 29 tháng 6 năm 2024 quy định gì",
     ):
         assert extract_as_of(q, T) == T, q
     # ngày thật cách xa số hiệu vẫn được nhận

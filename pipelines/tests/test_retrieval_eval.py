@@ -305,6 +305,17 @@ def test_strict_gateway_turns_malformed_responses_into_gateway_lost():
     assert re_.EVAL_STEP_TIMEOUT_S >= 120
 
 
+def test_strict_gateway_rejects_non_finite_embedding(monkeypatch):
+    from app.llm.gateway import Gateway
+
+    async def nan_embed(self, texts):
+        return [[float("nan")] * 1024]
+
+    monkeypatch.setattr(Gateway, "embed", nan_embed)
+    with pytest.raises(GatewayLost):
+        run_async(StrictGateway(None, "").embed(["q"]))
+
+
 def test_run_modes_lifts_backend_step_timeouts(conn, db_url, tiny):
     import app.retrieval.search as bs
 

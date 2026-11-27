@@ -181,7 +181,7 @@ async def build_plan(
             search_q,
             *(m["content"] for m in reversed(history) if m["role"] == "user"),
         ):
-            if (d := extract_as_of(t[:MAX_QUERY_CHARS], date.min)) != date.min:
+            if (d := extract_as_of(t[:MAX_QUERY_CHARS], today)) != today:
                 as_of = d
                 break
     conn = PooledReader(

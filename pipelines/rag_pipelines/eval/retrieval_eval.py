@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import os
 import sys
 from datetime import date
@@ -191,8 +192,8 @@ class StrictGateway(Gateway):
             vecs = await super().embed(texts)
         except LLMOffline as e:
             raise GatewayLost(f"bad embeddings response during eval: {e}") from e
-        if any(len(v) != EMBED_DIM for v in vecs):
-            raise GatewayLost("embedding dimension mismatch during eval")
+        if any(len(v) != EMBED_DIM or not all(map(math.isfinite, v)) for v in vecs):
+            raise GatewayLost("bad embedding (dimension or non-finite) during eval")
         return vecs
 
     async def rerank(

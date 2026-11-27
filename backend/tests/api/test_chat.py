@@ -355,6 +355,24 @@ def test_llm_health_cached_15s(client):
     assert gw.health_route.call_count == 1  # /health probe một lần cho hai request
 
 
+def test_bare_past_year_in_earlier_turn_maps_to_31_dec(client, monkeypatch):
+    seen = []
+    real = chat_mod.retrieve
+
+    async def spy(question, as_of, *a, **kw):
+        seen.append(as_of)
+        return await real(question, as_of, *a, **kw)
+
+    monkeypatch.setattr(chat_mod, "retrieve", spy)
+    hist = [
+        turn("user", "Năm 2025 nghỉ ốm được bao nhiêu ngày?"),
+        turn("assistant", "x"),
+    ]
+    with Gateway(condensed="chế độ thai sản"):
+        ask(client, "Còn thai sản thì sao?", hist)
+    assert [d.isoformat() for d in seen] == ["2025-12-31"]
+
+
 def test_as_of_carries_over_from_earlier_user_turn(client, monkeypatch):
     seen = []
     real = chat_mod.retrieve
