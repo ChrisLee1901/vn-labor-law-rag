@@ -9,7 +9,7 @@ flowchart LR
     B[Trình duyệt]
 
     subgraph V["Vercel (syd1)"]
-        W["Next.js 16 (web)<br/>giao diện, rewrite /api/*"]
+        W["Next.js 16 (web)<br/>giao diện, /api/* chuyển sang api (Vercel Services)"]
         A["FastAPI (api)<br/>truy xuất, prompt, kiểm tra trích dẫn"]
     end
 

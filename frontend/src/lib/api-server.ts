@@ -24,11 +24,11 @@ export function getApiBase(env: Env = process.env): string {
 // Với trang `force-dynamic`, `next.revalidate` vẫn đưa kết quả vào Data Cache (kiểm chứng Next 16.4.6, patch-fetch.js):
 // trang render theo yêu cầu (mỗi lượt xem vẫn chạy một function) nhưng gọi API chỉ xảy ra tối đa 1 lần/giờ.
 // Đừng thêm `cache: "no-store"` hay `fetchCache` vào đây: sẽ âm thầm tắt cache 1 giờ này.
-const OPTS = { next: { revalidate: 3600 } };
+const opts = () => ({ next: { revalidate: 3600 }, signal: AbortSignal.timeout(10_000) }); // timeout theo từng call
 
 /** Danh sách văn bản. Ném lỗi khi API hỏng hoặc trả sai dạng. */
 export async function fetchDocs(): Promise<DocSummary[]> {
-  const res = await fetch(`${getApiBase()}/api/docs`, OPTS);
+  const res = await fetch(`${getApiBase()}/api/docs`, opts());
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body: unknown = await res.json();
   if (!Array.isArray(body)) throw new Error("Phản hồi /api/docs không phải mảng");
@@ -37,7 +37,7 @@ export async function fetchDocs(): Promise<DocSummary[]> {
 
 /** Chi tiết văn bản; `null` nếu mã không tồn tại (404). Dùng chung giữa metadata và trang trong một request. */
 export const fetchDocDetail = cache(async (code: string): Promise<DocDetailResponse | null> => {
-  const res = await fetch(`${getApiBase()}/api/docs/${encodeURIComponent(code)}`, OPTS);
+  const res = await fetch(`${getApiBase()}/api/docs/${encodeURIComponent(code)}`, opts());
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const body = (await res.json()) as DocDetailResponse;

@@ -21,10 +21,13 @@ export function Feedback({ traceId }: { traceId?: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const detail = res.status === 429 ? ((await res.json().catch(() => null)) as { detail?: unknown } | null)?.detail : null;
+        throw new Error(typeof detail === "string" ? detail : "");
+      }
       setVote(score);
-    } catch {
-      toast.error("Không gửi được đánh giá, vui lòng thử lại.");
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : "Không gửi được đánh giá, vui lòng thử lại.");
     } finally {
       setBusy(false);
     }

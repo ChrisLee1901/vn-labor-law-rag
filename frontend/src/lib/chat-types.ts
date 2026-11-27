@@ -44,7 +44,7 @@ export function messageInfo(m: ChatMessage): MessageInfo {
 }
 
 export function isChatMessage(v: unknown): v is ChatMessage {
-  return isObj(v) && typeof v.id === "string" && (v.role === "user" || v.role === "assistant" || v.role === "system") && Array.isArray(v.parts);
+  return isObj(v) && typeof v.id === "string" && (v.role === "user" || v.role === "assistant" || v.role === "system") && Array.isArray(v.parts) && v.parts.every(isObj);
 }
 
 export const userText = (m: ChatMessage) => messageInfo(m).text;

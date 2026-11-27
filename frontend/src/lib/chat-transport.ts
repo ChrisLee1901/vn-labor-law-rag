@@ -10,7 +10,7 @@ export function toRequestMessages(messages: ChatMessage[]) {
     .map((m) => ({
       id: m.id,
       role: m.role,
-      parts: m.parts.flatMap((p) => (p.type === "text" ? [{ type: "text" as const, text: p.text }] : [])),
+      parts: m.parts.flatMap((p) => (p?.type === "text" ? [{ type: "text" as const, text: p.text }] : [])),
     }))
     .filter((m) => m.role === "user" || m.parts.length > 0);
   while (slim.length && slim[slim.length - 1].role !== "user") slim.pop();
@@ -24,7 +24,7 @@ export function createChatTransport(api: string) {
   });
 }
 
-export const CHAT_API = process.env.NEXT_PUBLIC_MOCK_CHAT === "1" ? "/api/mock/chat" : "/api/chat";
+export const CHAT_API = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_MOCK_CHAT === "1" ? "/api/mock/chat" : "/api/chat";
 
 export const GENERIC_ERROR = "Đã xảy ra lỗi, vui lòng thử lại.";
 export const NETWORK_ERROR = "Kết nối bị gián đoạn, vui lòng thử lại.";

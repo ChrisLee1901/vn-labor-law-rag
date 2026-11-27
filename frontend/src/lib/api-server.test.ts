@@ -38,7 +38,7 @@ describe("fetchDocs / fetchDocDetail", () => {
   it("requests /api/docs with an hourly revalidate", async () => {
     const f = stub({ json: async () => DOCS });
     expect(await fetchDocs()).toEqual(DOCS);
-    expect(f).toHaveBeenCalledWith("https://api.test/api/docs", { next: { revalidate: 3600 } });
+    expect(f).toHaveBeenCalledWith("https://api.test/api/docs", { next: { revalidate: 3600 }, signal: expect.any(AbortSignal) });
   });
   it("rejects on non-2xx or non-array body", async () => {
     stub({ ok: false, status: 503 });
@@ -55,7 +55,7 @@ describe("fetchDocs / fetchDocDetail", () => {
   it("returns the body and keeps the revalidate option", async () => {
     const f = stub({ json: async () => DETAIL });
     expect(await fetchDocDetail("ND145-2020")).toEqual(DETAIL);
-    expect(f).toHaveBeenCalledWith("https://api.test/api/docs/ND145-2020", { next: { revalidate: 3600 } });
+    expect(f).toHaveBeenCalledWith("https://api.test/api/docs/ND145-2020", { next: { revalidate: 3600 }, signal: expect.any(AbortSignal) });
   });
   it("percent-encodes the code in the URL", async () => {
     const f = stub({ json: async () => DETAIL });

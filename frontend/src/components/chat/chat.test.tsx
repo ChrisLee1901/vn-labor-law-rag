@@ -46,11 +46,24 @@ async function ask(question = "Lương tối thiểu vùng I?") {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   resetDocsCache();
 });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Chat", () => {
+  it("restores the current conversation after leaving and coming back (Back from a cited article)", async () => {
+    stubFetch("rag");
+    const first = render(<Chat />);
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox", { name: "Câu hỏi" }), "Lương tối thiểu vùng I?{Enter}");
+    await waitFor(() => expect(loadChats()).toHaveLength(1));
+    first.unmount();
+    render(<Chat />);
+    await waitFor(() => expect(screen.getByText("Lương tối thiểu vùng I?")).toBeInTheDocument());
+    expect(screen.queryByRole("list", { name: "Câu hỏi gợi ý" })).toBeNull();
+  });
+
   it("shows the empty state with 6 suggested questions that send on click", async () => {
     stubFetch("rag");
     const user = userEvent.setup();
@@ -246,11 +259,11 @@ describe("Chat errors", () => {
       render(<Chat />);
       await user.type(screen.getByRole("textbox", { name: "Câu hỏi" }), "Hỏi{Enter}");
       await screen.findByText("Phần trả lời dở");
-      await act(() => vi.advanceTimersByTimeAsync(40_000));
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
       expect(screen.queryByRole("alert")).toBeNull();
       controller.enqueue(enc.encode(sse({ type: "text-delta", id: "t", delta: " thêm" })));
       await screen.findByText(/thêm/);
-      await act(() => vi.advanceTimersByTimeAsync(40_000)); // 80 s tổng nhưng chunk giữa chừng reset đồng hồ
+      await act(() => vi.advanceTimersByTimeAsync(60_000)); // 120 s tổng nhưng chunk giữa chừng reset đồng hồ
       expect(screen.queryByRole("alert")).toBeNull();
       await act(() => vi.advanceTimersByTimeAsync(6_000));
       expect(await screen.findByRole("alert")).toHaveTextContent("Mô hình phản hồi quá lâu. Bạn có thể thử lại.");

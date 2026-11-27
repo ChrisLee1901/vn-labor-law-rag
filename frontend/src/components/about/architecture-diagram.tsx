@@ -52,7 +52,7 @@ export function ArchitectureDiagram() {
         </text>
 
         <Node x={16} y={60} w={140} h={60} name="Trình duyệt" detail={["Hỏi đáp, Văn bản"]} />
-        <Node x={226} y={52} w={228} h={48} name="Next.js 16 (web)" detail={["giao diện, rewrite /api/*"]} />
+        <Node x={226} y={52} w={228} h={48} name="Next.js 16 (web)" detail={["giao diện, /api/* chuyển sang api"]} />
         <Node x={226} y={140} w={228} h={56} name="FastAPI (api)" detail={["truy xuất, prompt, kiểm tra trích dẫn"]} />
         <Node x={540} y={128} w={204} h={80} name="Supabase Postgres" detail={["pgvector halfvec 1024 + tsvector", "hybrid_search (RRF)"]} />
         <Node x={220} y={250} w={240} h={32} name="ngrok (HTTPS, domain tĩnh)" />

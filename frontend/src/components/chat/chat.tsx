@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
-import { saveChat, newChatId, type StoredChat } from "@/lib/chat-storage";
+import { loadChats, saveChat, newChatId, type StoredChat } from "@/lib/chat-storage";
 import { CHAT_API, STALL_ERROR, createChatTransport, friendlyError } from "@/lib/chat-transport";
 import { messageInfo, userText, type ChatMessage } from "@/lib/chat-types";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -17,7 +17,10 @@ import { SourcesPanel } from "./sources-panel";
 import { SuggestedQuestions } from "./suggested-questions";
 
 /** Không có chunk nào trong ngần này thời gian khi đang stream thì coi là treo. */
-export const STALL_MS = 45_000;
+export const STALL_MS = 65_000; // lớn hơn thời gian chờ tối đa của backend trước khi stream (~45 s)
+
+/** Hội thoại đang mở: quay lại từ trang văn bản (Back) thì dựng lại thay vì phiên trống. */
+const CURRENT_KEY = "rag.current";
 
 interface Selection {
   messageId: string;
@@ -27,13 +30,28 @@ interface Selection {
 /** Vỏ chọn hội thoại: đổi hội thoại = dựng lại phiên với id mới (key). */
 export function Chat() {
   const [session, setSession] = useState<{ id: string; messages: ChatMessage[] }>(() => ({ id: newChatId(), messages: [] }));
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem(CURRENT_KEY);
+      const c = id ? loadChats().find((x) => x.id === id) : undefined;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- chỉ đọc storage sau khi mount để không lệch hydration
+      if (c) setSession({ id: c.id, messages: c.messages });
+    } catch {
+      /* sessionStorage bị chặn: vào phiên trống */
+    }
+  }, []);
   return (
     <ChatSession
       key={session.id}
       id={session.id}
       initialMessages={session.messages}
       onOpen={(c: StoredChat) => setSession({ id: c.id, messages: c.messages })}
-      onNew={() => setSession({ id: newChatId(), messages: [] })}
+      onNew={() => {
+        try {
+          sessionStorage.removeItem(CURRENT_KEY);
+        } catch {}
+        setSession({ id: newChatId(), messages: [] });
+      }}
     />
   );
 }
@@ -74,6 +92,9 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
     if (busy || !dirty.current || messages.length === 0) return;
     const first = messages.find((m) => m.role === "user");
     saveChat({ id, title: (first ? userText(first) : "Cuộc hội thoại").slice(0, 60), updatedAt: Date.now(), messages });
+    try {
+      sessionStorage.setItem(CURRENT_KEY, id);
+    } catch {}
   }, [busy, messages, id]);
 
   // Đồng hồ treo: dựng lại mỗi khi `messages` đổi (mỗi part mới) hoặc trạng thái đổi.
@@ -121,7 +142,7 @@ function ChatSession({ id, initialMessages, onOpen, onNew }: SessionProps) {
 
   const last = messages.at(-1);
   const empty = messages.length === 0;
-  const finished = !busy && !error && last?.role === "assistant";
+  const finished = !busy && !error && !stalled && last?.role === "assistant";
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-8">
