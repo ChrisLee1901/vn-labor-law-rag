@@ -22,7 +22,7 @@ for name in ("NGROK_AUTHTOKEN", "NGROK_DOMAIN", "GATEWAY_API_KEY", "HF_TOKEN"):
 os.environ["NGROK_DOMAIN"] = os.environ["NGROK_DOMAIN"].removeprefix("https://").rstrip("/")
 os.makedirs("/kaggle/working", exist_ok=True)
 os.chdir("/kaggle/working")
-subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyngrok", "fastapi", "uvicorn", "httpx"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyngrok==7.2.3", "fastapi==0.115.6", "uvicorn==0.34.0", "httpx==0.28.1"], check=True)
 """
 
 LLAMA_BIN = r"""# [2] llama-server binary (dataset llamacpp-sm75-bin, else build from source ~26 min)
@@ -91,10 +91,11 @@ cmd = [
     "--chat-template-kwargs", json.dumps({"enable_thinking": False}),
     "--host", "127.0.0.1", "--port", "8080",
 ]
-llama_log = open("/kaggle/working/llama.log", "wb")
+os.makedirs("/kaggle/temp", exist_ok=True)  # ngoài /kaggle/working để log (có prompt) không nằm trong output lưu lại
+llama_log = open("/kaggle/temp/llama.log", "wb")
 llama_proc = subprocess.Popen(cmd, stdout=llama_log, stderr=subprocess.STDOUT,
-                              env=dict(os.environ, CUDA_VISIBLE_DEVICES="0"))
-print("llama-server pid", llama_proc.pid, "- log: /kaggle/working/llama.log")
+                              env={k: os.environ[k] for k in ("PATH", "LD_LIBRARY_PATH", "HOME") if k in os.environ} | {"CUDA_VISIBLE_DEVICES": "0"})  # không đưa secret cho llama-server
+print("llama-server pid", llama_proc.pid, "- log: /kaggle/temp/llama.log")
 """
 
 GATEWAY_START = r"""# [5] gateway on :8000 (background thread; loads embedder + reranker fp16 on cuda:1)
@@ -143,12 +144,12 @@ while True:
     if h and h.get("status") == "ok":
         break
     if llama_proc.poll() is not None:
-        print(open("/kaggle/working/llama.log", errors="replace").read()[-3000:])
+        print(open("/kaggle/temp/llama.log", errors="replace").read()[-3000:])
         raise RuntimeError(f"llama-server exited with code {llama_proc.returncode}")
     if gateway_err:
         raise RuntimeError("gateway thread crashed, see traceback above")
     if time.time() - t0 > 900:
-        print(open("/kaggle/working/llama.log", errors="replace").read()[-3000:])
+        print(open("/kaggle/temp/llama.log", errors="replace").read()[-3000:])
         raise TimeoutError("not ready after 15 min")
     time.sleep(10)
 print("local stack ready in", int(time.time() - t0), "s")
@@ -196,17 +197,22 @@ if "<think>" in msg:
 print("READY", PUBLIC_URL)
 """
 
-KEEPALIVE = r"""# [9] keep-alive: log /health every 60 s.
-# STOP THE SESSION after the interview (Kaggle > Session options > Stop session). Do not leave it running (Kaggle ToS).
+KEEPALIVE = r"""# [9] bounded keep-alive: log /health every 60 s for DEMO_HOURS, then shut everything down (Kaggle ToS rule 8: never run unattended).
+# Still STOP THE SESSION yourself after the interview (Kaggle > Session options > Stop session) to release the GPU.
 import json, time, urllib.request
 
-while True:
+DEMO_HOURS = 2
+deadline = time.time() + DEMO_HOURS * 3600
+while time.time() < deadline:
     try:
         with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=5) as r:
             print(time.strftime("%H:%M:%S"), json.load(r))
     except Exception as e:
         print(time.strftime("%H:%M:%S"), "health failed:", e)
     time.sleep(60)
+ngrok.kill()
+llama_proc.terminate()
+print("STOPPED: demo window over. Stop the session now (Session options > Stop session).")
 """
 
 

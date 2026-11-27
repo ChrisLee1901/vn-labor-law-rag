@@ -4,6 +4,7 @@ import hmac
 import math
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Protocol
 
@@ -97,20 +98,25 @@ def create_app(
 
     app.add_middleware(GuardMiddleware)
 
+    probe = (0.0, False)  # (monotonic, llm ok): /health không xác thực, cache 5 s để không đốt quota ngrok / llama
+
     @app.get("/health")
     async def health():
-        try:
-            r = await client.get(f"{llm_url}/health", timeout=2.0)
-            llm = r.status_code == 200 and r.json().get("status") == "ok"
-        except Exception:
-            llm = False
+        nonlocal probe
+        if time.monotonic() - probe[0] > 5.0:
+            try:
+                r = await client.get(f"{llm_url}/health", timeout=2.0)
+                ok = r.status_code == 200 and r.json().get("status") == "ok"
+            except Exception:
+                ok = False
+            probe = (time.monotonic(), ok)
+        llm = probe[1]
         emb, rer = embedder is not None, reranker is not None
         return {
             "status": "ok" if llm and emb and rer else "loading",
             "llm": llm,
             "embedder": emb,
             "reranker": rer,
-            "model": model_name,
         }
 
     @app.post("/v1/embeddings")

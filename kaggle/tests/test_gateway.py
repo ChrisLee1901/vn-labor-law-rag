@@ -278,3 +278,13 @@ async def test_upstream_closed_on_client_disconnect():
 
     await asyncio.wait_for(app(scope, receive, send), timeout=10)
     assert closed.is_set()
+
+
+@respx.mock
+def test_health_caches_llm_probe_and_hides_model(client):
+    route = respx.get(f"{LLM}/health").mock(
+        return_value=httpx.Response(200, json={"status": "ok"})
+    )
+    for _ in range(3):
+        h = client.get("/health").json()
+    assert route.call_count == 1 and h["llm"] is True and "model" not in h

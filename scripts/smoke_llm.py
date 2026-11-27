@@ -385,7 +385,7 @@ def print_result(c, res, steps):
         "health: "
         + " ".join(
             f"{k}={str(h.get(k, '(absent)'))[:80]}"
-            for k in ("status", "llm", "embedder", "reranker", "model")
+            for k in ("status", "llm", "embedder", "reranker")
         )
     )
     if "embed_dims" in res:

@@ -337,7 +337,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
   6. Chạy uvicorn `gateway:create_app(...)` ở cổng 8000 (thread).
   7. Mở ngrok `--url=$NGROK_DOMAIN` tới 8000.
   8. In `READY https://<domain>` cùng kết quả smoke test.
-  9. Cell cuối giữ phiên sống: vòng lặp log `/health` mỗi 60 s.
+  9. Cell cuối giữ phiên sống có giới hạn: log `/health` mỗi 60 s trong `DEMO_HOURS = 2` giờ, rồi `ngrok.kill()` + `llama_proc.terminate()` và in "STOPPED" (luật 8: không chạy vô hạn).
 - [x] `runbook-kaggle.md`: checklist "trước phỏng vấn 15 phút" (mở notebook → chọn T4 x2 → Run All → chờ READY → mở app thấy badge xanh → hỏi thử 1 câu), "sau phỏng vấn" (Stop session), và cách xử lý sự cố (queue GPU, 401, badge vẫn đỏ).
 - [ ] `[USER]` Thêm 4 secret vào Kaggle, chạy notebook. **Đạt** khi in `READY` trong ≤ 10 phút từ lúc Run All. — *chờ [USER]: chạy notebook thật trên Kaggle; chưa chạy*
 - [x] Commit `feat(kaggle): serve notebook and interview runbook`.

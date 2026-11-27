@@ -102,3 +102,14 @@ def test_ngrok_cell_guards_authtoken(monkeypatch):
     e = ei.value
     assert secret not in str(e) and "CalledProcessError" in str(e)
     assert e.__cause__ is None and e.__suppress_context__
+
+
+def test_keepalive_is_bounded_and_shuts_down():
+    src = _src(next(c for c in _nb()["cells"] if _key(c) == "9"))
+    assert "while True" not in src
+    assert "deadline" in src and "ngrok.kill()" in src and "llama_proc.terminate()" in src
+
+
+def test_llama_server_gets_minimal_env_and_log_outside_working():
+    src = _src(next(c for c in _nb()["cells"] if _key(c) == "3"))
+    assert "dict(os.environ" not in src and "/kaggle/temp/llama.log" in src
