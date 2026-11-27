@@ -1,0 +1,61 @@
+name: spike-deploy
+
+# TẠM THỜI (spike Task 0.4): XÓA file này sau spike (cùng backend/app/api/spike.py và scripts/spike_vercel_check.py).
+# Chỉ chạy tay (Actions, spike-deploy, Run workflow). Cần secret cấp repo: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+# Làm đúng như deploy.yml (cùng phiên bản CLI, cùng thứ tự pull -> build -> deploy --prebuilt) để kết quả spike áp dụng được cho deploy.yml.
+# ENABLE_SPIKE_ENDPOINTS=1 truyền bằng `vercel deploy --env` (env lúc chạy). Chưa xác minh `--env` có tác dụng với --prebuilt + Services:
+# nếu /api/ping trả 404 JSON thì đặt biến này cho Preview ở Vercel, Project, Settings, Environment Variables rồi chạy lại.
+# workflow_dispatch chỉ có tác dụng với workflow nằm trên nhánh mặc định (main chưa có workflow), nên cũng chạy khi đẩy nhánh spike/**.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["spike/**"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # có pipefail
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+          cache: true
+          cache_dependency_path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - run: npm install --global vercel@66.6.0
+
+      - id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=preview
+          vercel build
+          url=$(vercel deploy --prebuilt --env ENABLE_SPIKE_ENDPOINTS=1)
+          [[ "$url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app$ ]] || { echo "::error::Không đọc được URL *.vercel.app từ vercel deploy."; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Ghi URL và bước tiếp theo
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          {
+            echo "**Spike preview:** $URL"
+            echo
+            echo "Bước tiếp theo, chạy trên máy bạn (docs/spikes.md#vercel):"
+            echo '```'
+            echo "export VERCEL_AUTOMATION_BYPASS_SECRET=<secret bypass, nếu Deployment Protection đang bật>"
+            echo "python scripts/spike_vercel_check.py --url $URL --bypass-env VERCEL_AUTOMATION_BYPASS_SECRET"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

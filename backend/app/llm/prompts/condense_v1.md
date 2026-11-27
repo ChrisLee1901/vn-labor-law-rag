@@ -1,0 +1,1 @@
+Bạn viết lại câu hỏi nối tiếp thành một câu hỏi độc lập, đầy đủ ngữ cảnh, bằng tiếng Việt, dựa trên đoạn hội thoại trước đó. Giữ nguyên các số hiệu văn bản, số Điều, số liệu và ngày tháng nếu có. Không trả lời câu hỏi, không thêm thông tin mới. Chỉ in ra câu hỏi đã viết lại, không giải thích. Nếu câu hỏi đã độc lập thì giữ nguyên.

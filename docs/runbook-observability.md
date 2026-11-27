@@ -1,0 +1,77 @@
+# Runbook quan sát (Langfuse): span, metadata, feedback, báo cáo độ trễ
+
+Code: `backend/app/tracing.py` (bọc mỏng SDK `langfuse`, không có `LANGFUSE_*` thì no-op), `backend/app/api/chat.py`, `backend/app/api/feedback.py`. Env: xem bảng trong [deploy.md](deploy.md). **Chưa có tài khoản Langfuse nào được dùng**: mọi thứ dưới đây mới được kiểm bằng một Langfuse giả trên loopback (`backend/tests/api/test_observability.py`); mục kiểm thật ở cuối vẫn chưa làm.
+
+## Mỗi request `/api/chat` ghi gì
+
+Một trace, id = `trace_id` mà client nhận ở part `data-trace` (cũng là id dùng cho `/api/feedback`). Span gốc `chat` (input là câu hỏi đã che PII, output là câu trả lời đã che PII) và các span con, mỗi span có `startTime`/`endTime` nên độ trễ = hiệu hai mốc:
+
+| Span | Chạy khi | Vắng mặt hợp lệ khi |
+|---|---|---|
+| `condense` | lượt hỏi thứ 2 trở đi, LLM online | lượt đầu; LLM offline |
+| `embed` | LLM online | LLM offline (kể cả câu trả lời dựng sẵn) |
+| `hybrid_search` | luôn, trừ câu trả lời dựng sẵn (`canned`) | chế độ `canned` |
+| `rerank` | online và hybrid có kết quả | offline; embed lỗi/hết giờ; không có kết quả |
+| `expand` | có ứng viên vượt ngưỡng từ chối τ | từ chối trước đó; `canned` |
+| `llm` | `mode = rag` (stream từ gateway) | offline, `refused`, `canned` |
+
+Span lỗi (gateway offline, hết giờ) vẫn có mặt, đánh `level=ERROR`. Offline có kết quả FTS chỉ sinh `chat`, `hybrid_search`, `expand`; `canned` chỉ sinh `chat`. Vì vậy `n` của các span khác nhau trong báo cáo độ trễ.
+
+Metadata nằm trên span gốc `chat` (ghi lúc kết thúc; mọi giá trị là chuỗi):
+
+| Khóa | Giá trị |
+|---|---|
+| `index_version` | `app_config.active_index_version` lúc trả lời |
+| `mode` | `rag`, `offline`, `refused` (câu trả lời dựng sẵn là `offline` kèm `canned=True`) |
+| `prompt_version` | `answer_v1`, lấy từ hằng `PROMPT_VERSION` của bộ nạp prompt (không ghi cứng lần thứ hai) |
+| `as_of` | ngày tra cứu hiệu lực |
+| `error` / `disconnected` | chỉ khi có lỗi (`timeout` hoặc tên exception) / client ngắt kết nối |
+
+Lệch so với brief ("metadata mức trace"): SDK Langfuse hiện cài (5.2.0) không còn `update_trace`; metadata mức trace chỉ có qua `propagate_attributes`, mà `index_version` và `mode` chỉ biết sau khi truy hồi. Nên metadata nằm ở observation gốc `chat` (khóa OTel `langfuse.observation.metadata.*`). Chưa kiểm trên UI thật xem nó có hiện ở khung metadata của trace không.
+
+PII: chỉ `input`/`output` của `chat` và `comment` của score mang văn bản, đều qua `app.pii.redact_pii` (email; số điện thoại và CMND/CCCD, kể cả khi viết `0912 345 678`, `091-234-5678`, `+84 912 345 678`, `001 203 004 567`). `redact_pii` chỉ dùng ở `app.tracing`: không đổi nội dung hiển thị cho người dùng, và bảng `feedback` vẫn lưu comment gốc. Dấu chấm không dùng để tách số CMND/CCCD (là dấu ngăn nghìn của tiền), và dạng tách nhóm không khớp khi đứng ngay sau `<số><dấu cách>`, nên không che nhầm 5.310.000, 12.000.000.000, 310 000 000 đồng, ngày hay số hiệu văn bản; đổi lại số điện thoại đứng ngay sau một con số + dấu cách (`2020 0912 345 678`) không được che. Span con không mang văn bản. Lịch sử hội thoại, văn bản câu hỏi đã gộp (condense) và nội dung điều luật không được gửi. Test dò toàn bộ byte Langfuse nhận được.
+
+## Feedback thành score
+
+`POST /api/feedback` lưu vào bảng `feedback` như cũ, sau đó (BackgroundTask, sau khi trả 204) gọi `create_score(name="user-feedback", value=±1, data_type=NUMERIC, trace_id=<trace_id của client>, comment=<đã che PII>)` và flush. Chỉ chuyển tiếp khi `trace_id` khớp `[0-9a-f]{32}` (id do backend sinh); id lạ vẫn lưu vào DB nhưng không tạo score mồ côi. `/api/feedback` có giới hạn riêng 30 lượt / giờ / IP (`ratelimit.FEEDBACK_LIMIT`, bucket Upstash tiền tố `fb:`, không chạm bucket chat và trần toàn cục), vượt thì 429. UI (`feedback.tsx`) xử lý 429 như mọi lỗi: một toast, nút bật lại, không vòng lặp. Một người bấm 👍 rồi 👎 tạo hai score (chưa có `score_id` cố định để ghi đè).
+
+## Không bao giờ chặn người dùng
+
+- Không cấu hình Langfuse, init lỗi, ingest trả 500, hay treo: chat và feedback không đổi kết quả (test `test_langfuse_failure_does_not_change_responses`).
+- Flush (span và score) chạy trong thread sau khi response đóng, tối đa `LANGFUSE_FLUSH_TIMEOUT_S` = 5 s (`backend/app/config.py`), quá thì bỏ (thread mồ côi tự kết thúc) và chỉ log mức debug. Đường client ngắt kết nối vẫn giữ trần 1 s như cũ.
+- Rủi ro đã biết từ Task 4.4: BackgroundTask dựa vào việc Vercel đợi app trả về; kiểm trace sau lần deploy đầu.
+
+## Báo cáo độ trễ
+
+```bash
+export LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... LANGFUSE_HOST=https://cloud.langfuse.com   # host đúng vùng của project
+python scripts/latency_report.py --days 7                       # hoặc --since 2026-12-01 --until 2026-12-08T00:00:00Z
+# ghi eval/results/latency.md (đổi bằng --out). Không commit file này khi chưa có dữ liệu thật.
+```
+
+Script chỉ dùng stdlib. Gọi `GET {host}/api/public/v2/observations` (Basic auth public:secret) theo cửa sổ `fromStartTime`/`toStartTime`, đi hết `meta.cursor`, nhóm theo `name`, lấy `endTime - startTime`, tính p50/p95 theo nearest-rank (giống `answer_eval.percentile`, test khóa hai bản bằng nhau). Bảng: `span | n | p50 (ms) | p95 (ms)`, thêm dòng `chat` (tổng thời gian request), cửa sổ thời gian và dòng `generated by scripts/latency_report.py`. Cửa sổ rỗng thì ghi "Không có dữ liệu" thay vì lỗi. Thoát 2: thiếu env hay tham số sai; 3: Langfuse lỗi (không ghi file; thông báo chỉ nêu mã HTTP, không in URL hay khóa). Trần 200 trang (200k observation); vượt thì thu hẹp cửa sổ.
+
+### Trường API đã dựa vào
+
+Đối chiếu tài liệu (langfuse.com/docs/api-and-data-platform/features/public-api, đọc 2026-11-22) và SDK cài sẵn (`langfuse` 5.2.0, `ObservationsV2Response`):
+
+| Trường | Trạng thái |
+|---|---|
+| endpoint `GET /api/public/v2/observations` (v1 `/api/public/observations` chỉ self-host v3) | đã đối chiếu tài liệu |
+| tham số `fromStartTime`, `toStartTime` (ISO 8601, bao gồm/không bao gồm), `limit` (mặc định 50, tối đa 1000), `cursor` | đã đối chiếu tài liệu và SDK |
+| phản hồi `data[]` và `meta.cursor` (vắng/null = hết; trang rỗng có thể vẫn có cursor) | đã đối chiếu tài liệu và SDK |
+| `data[].name`, `startTime`, `endTime`, `traceId`, `type` (nhóm `core`/`basic`, mặc định) | đã đối chiếu tài liệu |
+| Basic auth public:secret | đã đối chiếu tài liệu |
+| `latency` (nhóm `metrics`, đơn vị giây theo docstring SDK) | **không dùng**; tính từ `startTime`/`endTime` |
+| `endTime` luôn có với span OTel đã kết thúc; tên span giữ nguyên (`condense`...) khi đi qua OTel | **chưa kiểm trên Langfuse thật** (kiểm bằng payload OTLP giả: tên và mốc thời gian đúng) |
+| Langfuse Cloud có cho phép gọi API này theo gói/vùng của bạn, rate limit | **chưa kiểm** |
+| Langfuse tự host phiên bản cũ chỉ có v1 | **chưa hỗ trợ**: script chỉ gọi v2 |
+
+## Kiểm thật lần đầu có LLM online (chưa làm)
+
+- [ ] Đặt `LANGFUSE_*` trên Vercel (hoặc `.env` local), bật Kaggle, hỏi một câu từ lượt thứ 2 của hội thoại (để có `condense`).
+- [ ] Mở Langfuse, tìm trace theo `trace_id` ở part `data-trace`: thấy đủ 6 span `condense`, `embed`, `hybrid_search`, `rerank`, `expand`, `llm` có thời lượng hợp lý, span gốc `chat` có metadata `index_version`, `mode=rag`, `prompt_version=answer_v1`.
+- [ ] Hỏi lượt đầu với notebook tắt: chỉ còn `chat`, `hybrid_search`, `expand` và `mode=offline`.
+- [ ] Bấm 👍/👎 trên UI: trace có score `user-feedback` (1 hoặc -1) và comment đã che số điện thoại.
+- [ ] Gõ số điện thoại vào câu hỏi: không thấy nó ở input/output của trace.
+- [ ] Chạy `python scripts/latency_report.py --days 1`: bảng có số liệu, `n` khớp số request vừa hỏi; kiểm tra metadata có hiện ở khung metadata của trace.

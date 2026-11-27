@@ -1,0 +1,6 @@
+# Một config cho backend, pipelines, kaggle, supabase/tests. Ghim rule để nâng ruff không tự thêm rule mới.
+extend-exclude = ["*.ipynb"]  # serve.ipynb do kaggle/build_notebook.py sinh ra
+force-exclude = true  # loại cả khi pre-commit truyền file trực tiếp
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

@@ -1,0 +1,123 @@
+{
+ "files": [
+  {
+   "code": "BLLD",
+   "file": "BLLD/BLLD.part1.docx",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAaHMpvrqWaeHuYm7lW3HNfzTzww8Myg35dDL_fJB4izwI587zRY2fhTIuaFHAnYbn08oE1fkRHBV4_tf7ynojZlbEzatsYbZNa-M0UFEcitaPM4nvXnT5Z9CIOGlTzsb3w~~&file_name=2026_131_18%2fVBHN-VPQH.docx",
+   "bytes": 169018,
+   "sha256": "1386441b1f513defdd55186d7e65b8432dcac87c2e0d78676de25facb9c5e6ff"
+  },
+  {
+   "code": "BLLD",
+   "file": "BLLD/BLLD.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/180507251028987904/2026/3/5/468971-1772684381_v1_1772690833_signed.pdf",
+   "bytes": 2296937,
+   "sha256": "9f0ead44c45112ca46882b01036179c23772d1494f7af32024c07f2366a62d27"
+  },
+  {
+   "code": "ND145-2020",
+   "file": "ND145-2020/ND145-2020.part1.doc",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAQWsKg3tuqaY0aWypnY78U6M2BY68Ekp0Gvvr483flbRosAK7IuThYYUtDcZZ44g2U73oYdmPr4w0SX3cQZgTEZTZ2-Ws914hRF83ddaIfuiv09xiPx1_UtZ6pbE5UJflg~~&file_name=2020_1203+%2b+1204_145-2020-N%c4%90-CP.doc",
+   "bytes": 999424,
+   "sha256": "a525c7105a833686d40bdd4cb563b4faccaa0e8fdade75fe77a59c488c7b1b96"
+  },
+  {
+   "code": "ND145-2020",
+   "file": "ND145-2020/ND145-2020.part2.doc",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAQWsKg3tuqaY0aWypnY78U6M2BY68Ekp0Gvvr483flbRosAK7IuThYYUtDcZZ44g2VqmMVSpyoIKm79zzf51LNtyfuQV7Fnenxkq6gXxhmcWh3jjl8cB9_MuGuP4oCcEkg~~&file_name=2020_1205+%2b+1206_145-2020-N%c4%90-CP.doc",
+   "bytes": 4423680,
+   "sha256": "f0c97dafea34c5f2890d7a74f7dd161191b9475126d71c85fc163c34ba01abd7"
+  },
+  {
+   "code": "ND145-2020",
+   "file": "ND145-2020/ND145-2020.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2020/12/32732/33806-1-20201203-1204145-2020-nd-cp.pdf",
+   "bytes": 1256507,
+   "sha256": "3131bee5778b06390f4f62fcffb751fdd78bf14f1a834ae17e0f9c1f319ca65a"
+  },
+  {
+   "code": "ND145-2020",
+   "file": "ND145-2020/ND145-2020.part2.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2020/12/32732/33809-1-20201205-1206145-2020-nd-cp.pdf",
+   "bytes": 2743013,
+   "sha256": "38de13854df47d0e27ee497b86272f874742cea7e68f1be26d81587ff95f170b"
+  },
+  {
+   "code": "ND293-2025",
+   "file": "ND293-2025/ND293-2025.part1.doc",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAQWsKg3tuqaY0aWypnY78U6M2BY68Ekp0Gvvr483flbRHgpMm9J0VAlR0yUknKoEL0SiY4lhc6Tu3m7PqBlf-kMCGsmEr5Rik62pQmajrfnEOxbx1ea6L0_dXJKDc84ssw~~&file_name=2025_1591+%2b+1592_293-2025-N%c4%90-CP.doc",
+   "bytes": 547840,
+   "sha256": "4a4cd7f25e7a4f6750036ac7e6635bd4db8da7fba67c319419450ab0eb8a19bf"
+  },
+  {
+   "code": "ND293-2025",
+   "file": "ND293-2025/ND293-2025.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2025/11/46568/59713-1-20251591-1592293-2025-nd-cp.pdf",
+   "bytes": 307194,
+   "sha256": "8ebf219debf9224796c98670d1eb5b8e5757d8ed74590c45ff5eab0dfc4fdbd0"
+  },
+  {
+   "code": "ND399-2026",
+   "file": "ND399-2026/ND399-2026.part1.pdf",
+   "url": "https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/11/399_2026_nd-cp_02112026_6-signed.signed.pdf",
+   "bytes": 606159,
+   "sha256": "760fbabf43a9ffddf7b80cbcc93cc03787a23c755a34bfb228fb76e14f3a380e"
+  },
+  {
+   "code": "LBHXH-2024",
+   "file": "LBHXH-2024/LBHXH-2024.part1.doc",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAQWsKg3tuqaY0aWypnY78U6M2BY68Ekp0Gvvr483flbRh8sHLTzOm0qH5bjU20pglJQtNqNXoBHzndKU_vCvAa0y4BLEsTneOyqwWQjRA4zj-S04CCdyEjl2PEN7jT8fMg~~&file_name=2024_987+%2b+988_41-2024-QH15.doc",
+   "bytes": 884736,
+   "sha256": "8988a66d04638141cfb1270cb2e7b7f8fd85b8097424b953145e07649d5d3dd4"
+  },
+  {
+   "code": "LBHXH-2024",
+   "file": "LBHXH-2024/LBHXH-2024.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2024/6/42576/51466-1-2024987-98841-2024-qh15.pdf",
+   "bytes": 1311363,
+   "sha256": "d46db2fcf0a62e8d788f99612071c881bbba0e00ec1992691f615fd1832ce8e8"
+  },
+  {
+   "code": "ND158-2025",
+   "file": "ND158-2025/ND158-2025.part1.doc",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAQWsKg3tuqaY0aWypnY78U6M2BY68Ekp0Gvvr483flbRippkpvQli7sLLTE-VlqmHUt7z6XpqXR3aF3KelXVt5e3IWJlx9qFw0he7t3V9_ntNb4h2FBJZilmMpe27sE_jw~~&file_name=2025_851+%2b+852_158-2025-N%c4%90-CP.doc",
+   "bytes": 737280,
+   "sha256": "c93134b94d6edaa03b9027caa8d427b7db081dd0aa2c3606bfe1b9d544688aa2"
+  },
+  {
+   "code": "ND158-2025",
+   "file": "ND158-2025/ND158-2025.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2025/6/45240/57069-1-2025851-852158-2025-nd-cp.pdf",
+   "bytes": 602738,
+   "sha256": "8510dd44ff77c794399b8bec9a228c0a4e6c7af671ea5367b597c04e2bce803f"
+  },
+  {
+   "code": "LVL-2025",
+   "file": "LVL-2025/LVL-2025.part1.doc",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAQWsKg3tuqaY0aWypnY78U6M2BY68Ekp0Gvvr483flbRFRkwQMv8zfILwYUas_TA-DuJqyjmqqV5wUvsjh4JQd5Tjm3d1mz0L2pu3G3yc8BwS9HpAor6MAkEN3_3jPAoEQ~~&file_name=2025_967+%2b+968_74-2025-QH15.doc",
+   "bytes": 608256,
+   "sha256": "2e39d4d98218b9821d73d999a946f5c2ce8a462675a6cf4cb17dc6e7796b0208"
+  },
+  {
+   "code": "LVL-2025",
+   "file": "LVL-2025/LVL-2025.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2025/6/45562/57700-1-2025967-96874-2025-qh15.pdf",
+   "bytes": 370135,
+   "sha256": "63cf9e29dc924956a1dcc6e28dab4ba9b518866241d0eaddca07f7e168761cc7"
+  },
+  {
+   "code": "ND374-2025",
+   "file": "ND374-2025/ND374-2025.part1.docx",
+   "url": "https://g7.cdnchinhphu.vn/api/download/stream?Url=tm-8mq6BhNw0NbrKRhTDAaHMpvrqWaeHuYm7lW3HNfzTzww8Myg35dDL_fJB4izwowXcSyWQu0Bb3HqTFLAE8CyBdXdybR2pQakm6PlNikvk1JP3d9Y4mw2WBnlI97Ge&file_name=2026_48_374%2f2025%2fN%c4%90-CP.docx",
+   "bytes": 249039,
+   "sha256": "771dd305ebd622aeae477a6804624d0d351b083cd8f3f2442c35c7abdfbe6ea9"
+  },
+  {
+   "code": "ND374-2025",
+   "file": "ND374-2025/ND374-2025.part1.pdf",
+   "url": "https://congbaocdn.chinhphu.vn/180507251028987904/2026/1/27/374signed-1769487531624346303243.pdf",
+   "bytes": 1980240,
+   "sha256": "fed2ca11e854adff27fead115b1889d8d7168032f7fbe665731b4f03d0d73c64"
+  }
+ ]
+}

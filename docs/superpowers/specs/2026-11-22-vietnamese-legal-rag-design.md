@@ -1,6 +1,6 @@
 # Thiết kế: RAG pháp luật lao động tiếng Việt end-to-end
 
-*Ngày: 2026-11-22 · Trạng thái: chờ duyệt · Nghiên cứu nền: `reports/Kiến trúc RAG tiếng Việt 2026.md` (nguồn và số liệu ở đó, file này không lặp lại).*
+*Ngày: 2026-11-22 · Trạng thái: chờ duyệt · Nghiên cứu nền: `docs/research/reports/Kiến trúc RAG tiếng Việt 2026.md` (nguồn và số liệu ở đó, file này không lặp lại).*
 
 ## 1. Mục đích và lý do
 
@@ -51,14 +51,16 @@ Lưu vector: **Supabase pgvector** (dữ liệu bền, mở bảng cho người 
 Trình duyệt ── Next.js 16 (Vercel, service "web")
                  │  /api/* (rewrite, cùng domain)
                  ▼
-             FastAPI (Vercel Python, service "api", sin1)
-               ├── Supabase Postgres (ap-southeast-1): legal_docs, chunks (halfvec 1024 + tsvector),
+             FastAPI (Vercel Python, service "api", syd1)
+               ├── Supabase Postgres (ap-southeast-2, Sydney): legal_docs, chunks (halfvec 1024 + tsvector),
                │     legal_refs, app_config, feedback, canned_answers; hàm hybrid_search (RRF)
                └── httpx ──► ngrok domain tĩnh ──► Kaggle notebook (T4 x2)
                                gateway FastAPI (bearer): /health, /v1/embeddings, /v1/rerank,
                                proxy SSE /v1/chat/completions ──► llama-server (GPU0)
                                embedder + reranker fp16 (GPU1)
 ```
+
+Region: chọn Sydney (`ap-southeast-2` cho Supabase, `syd1` cho function Vercel) vì project Supabase của chủ dự án nằm ở đó và các vòng gọi DB (~7 lần mỗi lượt chat) quyết định độ trễ.
 
 ### 6.2 Luồng một câu hỏi (online)
 
@@ -87,11 +89,11 @@ Trình duyệt ── Next.js 16 (Vercel, service "web")
 ### 6.5 Hạ tầng và CI/CD
 
 - **Repo layout:** `frontend/`, `backend/`, `pipelines/` (không deploy), `kaggle/`, `supabase/migrations/`, `eval/`, `docs/`, `.github/workflows/`.
-- **Supabase:** **1 project duy nhất** (người dùng chốt, vì free tier). An toàn nhờ: CI và test chạy Postgres tạm trên runner (`supabase db start`), không chạm project thật; migration chỉ cộng thêm (additive); re-ingest ghi vào `index_version` mới rồi đổi con trỏ `app_config.active_index_version` (blue/green trong 1 DB, rollback bằng cách đổi lại con trỏ).
+- **Supabase:** **1 project duy nhất** (người dùng chốt, vì free tier). An toàn nhờ: CI và test chạy Postgres pgvector tạm (service container `pgvector/pgvector:pg17` trên runner; local dùng Docker `scripts/test-db.sh`), không chạm project thật; migration chỉ cộng thêm (additive); re-ingest ghi vào `index_version` mới rồi đổi con trỏ `app_config.active_index_version` (blue/green trong 1 DB, rollback bằng cách đổi lại con trỏ).
 - **CI (`ci.yml`):** path filter, chạy các job web / api / db / eval-retrieval. Job tổng `ci-ok` là check bắt buộc duy nhất.
 - **CD:** chạy từ Actions bằng `vercel pull/build/deploy --prebuilt`, `needs: ci-ok`. Fallback là Vercel Git integration nếu spike P0 cho thấy `--prebuilt` không hỗ trợ Services.
 - **Eval:** `eval-retrieval` (PR, không cần GPU: cache embedding + index đóng băng + ranx). `eval-full` (dispatch khi Kaggle bật).
-- **Vận hành:** keep-alive cron hằng ngày. Chống lạm dụng bằng WAF 1 rule, Upstash và giới hạn input.
+- **Vận hành:** keep-alive bằng GitHub schedule 3 ngày một lần (Vercel cron hằng ngày: chưa thêm, chờ spike Services). Chống lạm dụng bằng WAF 1 rule, Upstash và giới hạn input.
 
 ## 7. Giao cho người build tự quyết
 
@@ -99,7 +101,7 @@ Tên biến, cấu trúc module bên trong mỗi thư mục, style UI chi tiết
 
 ## 8. Các quyết định do Claude tự chốt (người dùng kiểm tra lại)
 
-- Tên hiển thị của app: **"Trợ lý Pháp luật Lao động"**. Repo: `real_rag`.
+- Tên hiển thị của app: **"Trợ lý Pháp luật Lao động"**. Repo: `vn-labor-law-rag`.
 - UI gồm 3 trang: **Chat** (khung chat + panel nguồn + badge online/offline + câu hỏi gợi ý), **Văn bản** (danh sách 8 văn bản với tình trạng hiệu lực, xem từng Điều), **Giới thiệu** (sơ đồ kiến trúc + bảng eval).
 - Không có đăng nhập. Lịch sử chat chỉ lưu ở localStorage.
 - ~~2 project Supabase~~ → người dùng chốt 1 project (xem 6.5). Dev local trỏ vào project đó, chỉ đọc hoặc ghi vào `index_version` thử nghiệm.
