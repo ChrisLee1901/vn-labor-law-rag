@@ -5,8 +5,11 @@ name: spike-deploy
 # Làm đúng như deploy.yml (cùng phiên bản CLI, cùng thứ tự pull -> build -> deploy --prebuilt) để kết quả spike áp dụng được cho deploy.yml.
 # ENABLE_SPIKE_ENDPOINTS=1 truyền bằng `vercel deploy --env` (env lúc chạy). Chưa xác minh `--env` có tác dụng với --prebuilt + Services:
 # nếu /api/ping trả 404 JSON thì đặt biến này cho Preview ở Vercel, Project, Settings, Environment Variables rồi chạy lại.
+# workflow_dispatch chỉ có tác dụng với workflow nằm trên nhánh mặc định (main chưa có workflow), nên cũng chạy khi đẩy nhánh spike/**.
 on:
   workflow_dispatch:
+  push:
+    branches: ["spike/**"]
 
 permissions:
   contents: read

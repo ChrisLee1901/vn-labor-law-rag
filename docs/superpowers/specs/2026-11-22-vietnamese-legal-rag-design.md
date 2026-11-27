@@ -89,11 +89,11 @@ Region: chọn Sydney (`ap-southeast-2` cho Supabase, `syd1` cho function Vercel
 ### 6.5 Hạ tầng và CI/CD
 
 - **Repo layout:** `frontend/`, `backend/`, `pipelines/` (không deploy), `kaggle/`, `supabase/migrations/`, `eval/`, `docs/`, `.github/workflows/`.
-- **Supabase:** **1 project duy nhất** (người dùng chốt, vì free tier). An toàn nhờ: CI và test chạy Postgres tạm trên runner (`supabase db start`), không chạm project thật; migration chỉ cộng thêm (additive); re-ingest ghi vào `index_version` mới rồi đổi con trỏ `app_config.active_index_version` (blue/green trong 1 DB, rollback bằng cách đổi lại con trỏ).
+- **Supabase:** **1 project duy nhất** (người dùng chốt, vì free tier). An toàn nhờ: CI và test chạy Postgres pgvector tạm (service container `pgvector/pgvector:pg17` trên runner; local dùng Docker `scripts/test-db.sh`), không chạm project thật; migration chỉ cộng thêm (additive); re-ingest ghi vào `index_version` mới rồi đổi con trỏ `app_config.active_index_version` (blue/green trong 1 DB, rollback bằng cách đổi lại con trỏ).
 - **CI (`ci.yml`):** path filter, chạy các job web / api / db / eval-retrieval. Job tổng `ci-ok` là check bắt buộc duy nhất.
 - **CD:** chạy từ Actions bằng `vercel pull/build/deploy --prebuilt`, `needs: ci-ok`. Fallback là Vercel Git integration nếu spike P0 cho thấy `--prebuilt` không hỗ trợ Services.
 - **Eval:** `eval-retrieval` (PR, không cần GPU: cache embedding + index đóng băng + ranx). `eval-full` (dispatch khi Kaggle bật).
-- **Vận hành:** keep-alive cron hằng ngày. Chống lạm dụng bằng WAF 1 rule, Upstash và giới hạn input.
+- **Vận hành:** keep-alive bằng GitHub schedule 3 ngày một lần (Vercel cron hằng ngày: chưa thêm, chờ spike Services). Chống lạm dụng bằng WAF 1 rule, Upstash và giới hạn input.
 
 ## 7. Giao cho người build tự quyết
 

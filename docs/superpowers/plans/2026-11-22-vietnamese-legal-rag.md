@@ -361,7 +361,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 **Interfaces:**
 - Consumes: `extract_text`, `parse_document`, `chunk_articles`, `extract_refs`, gateway `/v1/embeddings`.
 - Produces: CLI `python -m rag_pipelines.ingest --index-version N [--dry-run]`. Upsert `legal_docs`, `articles`, `chunks` (kèm `fts_noaccent = to_tsvector('simple', strip_diacritics(embed_text))` tính trong Python), `legal_refs`. Embed theo batch 32. **Không** đổi `active_index_version`.
-- `python -m rag_pipelines.export_index --index-version N` → `eval/index/v{N}.parquet` (cột: `id, parent_id, doc_code, article, clause, point, embed_text, content, embedding: list[float16]`) + `eval/index/v{N}.legal.parquet` (legal_docs, articles, legal_refs). Đây là dữ liệu CI dùng.
+- `python -m rag_pipelines.export_index --index-version N` → `eval/index/v{N}.parquet` (cột: `id, parent_id, doc_code, article, clause, point, embed_text, content, embedding: list[float16]`) + `eval/index/v{N}.legal_docs.parquet`, `v{N}.articles.parquet`, `v{N}.legal_refs.parquet`. Đây là dữ liệu CI dùng.
 
 - [x] Test hỏng (DB local + fake embed client trả vector cố định):
   - `test_ingest_idempotent`: chạy 2 lần → số dòng `chunks` không đổi.
@@ -571,7 +571,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 - [x] Job `ci-ok` với `if: always()`: fail nếu bất kỳ job `needs` nào `failure`/`cancelled` (`skipped` thì cho qua).
 - [ ] `[USER]` Bật branch protection cho `main`: require PR + check `ci-ok`. — *chờ [USER]: xem docs/ci.md*
 - [x] Dependabot: npm (`/frontend`), uv (`/backend`, `/pipelines`), github-actions; chạy hàng tuần.
-- [ ] Kiểm tra: mở một PR thử sửa README → chỉ `changes` và `ci-ok` chạy và xanh. — *chờ live batch: chưa có remote; mới mô phỏng path filter bằng suy luận, chưa mở PR thật*
+- [ ] Kiểm tra: mở một PR thử sửa README → chỉ `changes` và `ci-ok` chạy và xanh. — *chờ live batch: PR #1 đã mở nhưng chạm nhiều path; chưa thử PR chỉ sửa README (secrets / deploy job cũng chạy)*
 - [x] Commit `ci: path-filtered CI with single required ci-ok check`.
 
 ### Task 6.2: `eval-retrieval.yml` (gate trên PR)
@@ -590,7 +590,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 **Files:** `.github/workflows/deploy.yml`.
 
 - [x] PR: sau khi CI xanh, `vercel pull --environment=preview` → `vercel build` → `vercel deploy --prebuilt`. Lấy URL, comment lên PR, rồi chạy Playwright (`BASE_URL=url`) chỉ với spec offline + docs. — *đã viết workflow + actionlint; chưa chạy trên GitHub/Vercel*
-- [x] `push: main`: job `migrate` (Environment `production`, `supabase link --project-ref $SUPABASE_PROJECT_REF` + `supabase db push`) → job `deploy-prod` (`vercel build --prod` + `vercel deploy --prebuilt --prod`) với `needs: [ci-ok, migrate]`. — *đã viết workflow + actionlint; chưa chạy trên GitHub/Supabase/Vercel*
+- [x] (Thực tế: `deploy-prod` gọi `deploy.yml` và cần `ci-ok`; `migrate` rồi `deploy`, cả hai Environment `production`; secret Supabase nằm trong Environment `production`.) `push: main`: job `migrate` (Environment `production`, `supabase link --project-ref $SUPABASE_PROJECT_REF` + `supabase db push`) → job `deploy-prod` (`vercel build --prod` + `vercel deploy --prebuilt --prod`) với `needs: [ci-ok, migrate]`. — *đã viết workflow + actionlint; chưa chạy trên GitHub/Supabase/Vercel*
 - [ ] `[USER]` Thêm GitHub Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`. Thêm Vercel env (Production + Preview): mọi biến ở 4.4. — *chờ [USER]*
 - [ ] Kiểm tra: merge một PR → production cập nhật; `/api/health` trả `db: "ok"`. — *chờ live batch: cần remote GitHub, secrets và project Vercel/Supabase thật*
 - [x] Commit `cd: gated preview and production deploys via Vercel CLI`.
@@ -613,7 +613,7 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 
 ### Task 6.5: Keep-alive
 
-- [ ] `vercel.json`: thêm cron `0 3 * * *` gọi `/api/cron/keepalive` (Hobby chỉ cho cron hằng ngày). Nếu Services không nhận cron ở root, ghi lại và dùng phương án GitHub. **Chưa làm:** `vercel.json` chưa tồn tại (Task 0.4, `[USER]`, cần spike Vercel Services); không tạo file một phần. Snippet và ghi chú đã nằm ở `docs/deploy.md` (mục Keep-alive, checklist 10). Tick khi Task 0.4 xong.
+- [ ] `vercel.json`: thêm cron `0 3 * * *` gọi `/api/cron/keepalive` (Hobby chỉ cho cron hằng ngày). Nếu Services không nhận cron ở root, ghi lại và dùng phương án GitHub. **Thực tế:** `vercel.json` đã có (Services, region syd1) nhưng chưa có cron; spike Vercel chưa chạy. Snippet và ghi chú đã nằm ở `docs/deploy.md` (mục Keep-alive, checklist 10). Tick khi Task 0.4 xong.
 - [x] `.github/workflows/keepalive.yml`: `schedule: "0 2 */3 * *"`, `curl -fsS -H "Authorization: Bearer $CRON_SECRET" $PROD_URL/api/cron/keepalive`. (actionlint sạch; thân step chạy thử với server giả: 204 -> 0, 401 -> 22, không kết nối -> 7, thiếu env -> 1. Chưa chạy trên GitHub. `[USER]`: secret `CRON_SECRET`, biến `PROD_URL`.)
 - [x] Commit `ops: Supabase keep-alive (Vercel cron + GitHub schedule)`.
 

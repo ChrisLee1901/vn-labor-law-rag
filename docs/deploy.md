@@ -2,7 +2,7 @@
 
 Workflow: `.github/workflows/deploy.yml` (tái sử dụng, `on: workflow_call`), do `ci.yml` gọi bằng hai job `deploy-preview` và `deploy-prod`. Cả hai `needs: ci-ok` và **không** nằm trong `needs` của `ci-ok`. Deploy bằng Vercel CLI (`vercel pull` / `build` / `deploy --prebuilt`) từ Actions; Vercel Git integration tắt.
 
-> **CHƯA XÁC MINH.** Repo chưa có remote, chưa có project Vercel hay Supabase. Workflow mới qua actionlint, chưa chạy lần nào trên GitHub. Hai điểm mở nhất: (1) `--prebuilt` có hỗ trợ Vercel Services hay không (spike Task 0.4: `vercel.json` đã có, `docs/spikes.md#vercel` ghi cách chạy, chưa chạy lần nào); (2) định dạng đầu ra `supabase db push --dry-run` mà `scripts/migration_guard.py` đọc. Mục "Phương án dự phòng" bên dưới là lối thoát cho (1).
+> **CHƯA XÁC MINH.** Repo đã có remote và PR #1 (CI chạy trên GitHub), nhưng chưa có project Vercel hay Supabase nối vào; deploy chưa chạy thật. `dependabot.yml` chỉ có tác dụng khi đã nằm trên `main`. Hai điểm mở nhất: (1) `--prebuilt` có hỗ trợ Vercel Services hay không (spike Task 0.4: `vercel.json` đã có, `docs/spikes.md#vercel` ghi cách chạy, chưa chạy lần nào); (2) định dạng đầu ra `supabase db push --dry-run` mà `scripts/migration_guard.py` đọc. Mục "Phương án dự phòng" bên dưới là lối thoát cho (1).
 
 ## Job nào chạy khi nào
 

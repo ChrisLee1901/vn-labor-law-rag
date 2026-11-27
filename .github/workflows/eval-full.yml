@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       model_label:
-        description: "Nhãn mô hình, khớp ^[A-Za-z0-9._-]{1,40}$ (vd Qwen3-8B-Q5_K_M)"
+        description: "Nhãn mô hình, khớp ^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$, không chứa hai dấu chấm liền nhau (vd Qwen3-8B-Q5_K_M)"
         required: true
         type: string
       base_url:
@@ -44,7 +44,7 @@ jobs:
           PROD_URL: ${{ vars.PROD_URL }}
         run: |
           set -euo pipefail
-          if ! [[ "$MODEL_LABEL" =~ ^[A-Za-z0-9._-]{1,40}$ ]]; then
+          if ! [[ "$MODEL_LABEL" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$ ]] || [[ "$MODEL_LABEL" == *..* ]]; then
             echo "::error::model_label không hợp lệ: chỉ chữ, số, '.', '_', '-', dài 1 đến 40 ký tự."
             exit 1
           fi

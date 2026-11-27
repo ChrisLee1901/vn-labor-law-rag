@@ -18,8 +18,8 @@ Nhắc an toàn (luật cứng trong `CLAUDE.md`):
 
 ## Trạng thái hiện tại (đã kiểm tra)
 
-- Nhánh là `feat/rag-v1` (63 commit), chưa có remote. `main` local chỉ là commit `a3407a3` (import tài liệu và corpus raw, **chưa có workflow**). Plan viết `main` vì plan có trước nhánh này.
-- Chưa có: `vercel.json`, `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
+- Nhánh là `feat/rag-v1`, đã có remote `origin` và PR #1 (vào `main`) đang mở. `main` chỉ là commit `a3407a3` (import tài liệu và corpus raw, **chưa có workflow**). Plan viết `main` vì plan có trước nhánh này.
+- `vercel.json` đã có (chưa chạy trên Vercel). Chưa có: `eval/index/`, `eval/cache/`, `eval/baselines/`, `eval/results/`. Các file này do trợ lý viết khi bạn nhắn đúng câu ở từng giai đoạn dưới đây.
 - Có sẵn: `kaggle/serve.ipynb` (sinh từ `kaggle/build_notebook.py`), `kaggle/build_llamacpp.ipynb` (spike 0.2, đã viết, chưa chạy), `docs/spikes.md` (khung, chưa có số), `docs/runbook-kaggle.md`, `docs/deploy.md`, `docs/ci.md`, `docs/runbook-eval.md`, `docs/runbook-observability.md`, 4 migration trong `supabase/migrations/`.
 
 ## Thứ tự và thời gian ước tính
@@ -48,6 +48,7 @@ Lý do (đọc từ `.github/workflows/ci.yml`, `deploy.yml`, `keepalive.yml`):
 
 - `main` ở `a3407a3` **không có workflow nào**, nên đẩy nó không kích hoạt gì. Nó chỉ tạo nhánh gốc và nhánh mặc định cho repo.
 - PR `feat/rag-v1` -> `main` chạy `ci.yml`. Các job `web`, `api`, `pipelines`, `kaggle`, `db`, `eval-retrieval`, `secrets`, `ci-ok` chạy (đều không cần secret của bạn). `eval-retrieval` sẽ **xanh kèm cảnh báo** "Gate inactive" vì chưa có `eval/baselines/main.json` (đúng thiết kế). `deploy-preview` tự bỏ qua kèm `::notice::` khi chưa có secret Vercel.
+- Nếu lỡ merge trước Giai đoạn G3: GitHub tự tạo Environment `production` không giới hạn nhánh, `migrate` đỏ (không có secret). Sửa Environment `production`: Deployment branches = Selected branches, chỉ `main`.
 - **Merge PR vào `main` là lúc `push: main` kích hoạt `deploy-prod`**: job `migrate` (Environment `production`) rồi `deploy`. Chưa có secret Supabase và Vercel thì job này **đỏ**. Ngoài ra `keepalive.yml` (chạy theo lịch từ nhánh mặc định) sẽ **đỏ** mỗi 3 ngày khi thiếu `CRON_SECRET` hoặc `PROD_URL`. Vì vậy: **đừng merge PR này vào `main` cho tới khi xong Giai đoạn G** (hoặc chấp nhận vài lần đỏ).
 
 Các bước:
@@ -130,7 +131,7 @@ Nội dung cần làm (theo plan Task 0.2, 0.3):
 4. Tải `Qwen3-8B-Q5_K_M.gguf` (repo GGUF của Qwen; không có thì bản `unsloth`), lưu thành Dataset private **`qwen3-8b-gguf`**.
 5. `llama-bench -m <gguf> -ngl 99 -p 4096 -n 256`. Ghi pp và tg tok/s. **Đạt** khi tg >= 15 tok/s (không đạt: thử Q4_K_M và ghi lại).
 6. `llama-server --help`: xác nhận các cờ `--jinja`, `-fa`, `--chat-template-kwargs`, `--api-key`, `--reasoning-budget`. Đây là điểm **chưa xác minh**: `kaggle/serve.ipynb` đang dùng `--jinja --reasoning-budget 0 --chat-template-kwargs {"enable_thinking": false}`; nếu bản build không nhận cờ nào, ghi tên cờ đúng.
-7. Spike SSE (notebook Kaggle riêng, không cần GPU, 3 secret `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`; tắt notebook `serve` trước vì một domain chỉ giữ một tunnel). Cell 1: `!git clone https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag` rồi `!pip install -q pyngrok fastapi uvicorn` (cần đã push, giai đoạn A). Cell 2: `!python vn-labor-law-rag/kaggle/spike_sse.py --duration-min 10`, chờ dòng `READY https://<NGROK_DOMAIN>` (tự thoát sau 10 phút). Trên máy bạn: `export GATEWAY_API_KEY=<GATEWAY_API_KEY>` rồi `python scripts/spike_sse_check.py --url https://<NGROK_DOMAIN>/stream --token-env GATEWAY_API_KEY --expect 150`. **Đạt** khi checker in `verdict: PASS` (đủ 150 event, không bị cắt, không dồn cục, không token và token sai đều 401).
+7. Spike SSE (notebook Kaggle riêng, không cần GPU, 3 secret `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`; tắt notebook `serve` trước vì một domain chỉ giữ một tunnel). Cell 1: `!git clone -b feat/rag-v1 --depth 1 https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag` (đến khi merge vào main; clone mặc định lấy `main` không có thư mục `kaggle/`) rồi `!pip install -q pyngrok fastapi uvicorn` (cần đã push, giai đoạn A). Cell 2: `!python vn-labor-law-rag/kaggle/spike_sse.py --duration-min 10`, chờ dòng `READY https://<NGROK_DOMAIN>` (tự thoát sau 10 phút). Trên máy bạn: `export GATEWAY_API_KEY=<GATEWAY_API_KEY>` rồi `python scripts/spike_sse_check.py --url https://<NGROK_DOMAIN>/stream --token-env GATEWAY_API_KEY --expect 150`. **Đạt** khi checker in `verdict: PASS` (đủ 150 event, không bị cắt, không dồn cục, không token và token sai đều 401).
 
 **Dấu hiệu thành công:** hai dataset private tồn tại; tg >= 15 tok/s; 150 event đủ qua curl.
 
@@ -229,7 +230,8 @@ Phần bạn làm:
 1. `npm i -g vercel` rồi `vercel login`. Trong thư mục repo: `vercel link` (tạo project mới). Lệnh này tạo `.vercel/project.json` (đã trong `.gitignore`) chứa `orgId` và `projectId` (không bí mật, nhưng chỉ cần cho GitHub Secrets).
 2. Thêm GitHub Secrets cấp repo: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (Settings, Secrets and variables, Actions).
 3. Không cần đặt env Vercel nào cho spike (`/api/ping` chưa gọi DB, đó là việc của Task 0.5; workflow tự truyền `ENABLE_SPIKE_ENDPOINTS=1`). Tùy chọn: tạo Protection Bypass for Automation (Deployment Protection) và `export VERCEL_AUTOMATION_BYPASS_SECRET=...` trên máy bạn.
-4. Đẩy nhánh lên GitHub rồi chạy workflow `spike-deploy` (tab Actions, Run workflow; `vercel pull --yes --environment=preview` -> `vercel build` -> `vercel deploy --prebuilt`). URL preview nằm ở job summary. Chạy `vercel build` trên Windows với service Python **chưa xác minh**; nếu cần thì dùng workflow (Linux) hoặc WSL.
+   Lưu ý: khi đã có secret `VERCEL_*`, job `deploy-preview` của PR sẽ chạy và có thể **đỏ** (chưa đặt `NEXT_PUBLIC_SITE_URL`, `docs.spec` cần dữ liệu thật) cho tới Giai đoạn G. Không chặn `ci-ok`.
+4. Đẩy nhánh spike: `git push origin feat/rag-v1:spike/vercel` (workflow `spike-deploy` chạy khi đẩy `spike/**`; nút Run workflow chỉ hiện khi workflow đã nằm trên nhánh mặc định, mà `main` chưa có workflow) ( `vercel pull --yes --environment=preview` -> `vercel build` -> `vercel deploy --prebuilt`). URL preview nằm ở job summary. Chạy `vercel build` trên Windows với service Python **chưa xác minh**; nếu cần thì dùng workflow (Linux) hoặc WSL.
 5. Chạy checker trên máy bạn: `python scripts/spike_vercel_check.py --url https://<preview>.vercel.app --bypass-env VERCEL_AUTOMATION_BYPASS_SECRET` (bỏ `--bypass-env` nếu không bật Protection). Dán nguyên khối `=== RESULT spike_vercel ===`. Nó kiểm các mục sau (xem tay nếu muốn: `curl -N` thêm `-H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET"` khi có Protection):
    - `/` hiển thị trang Next.js.
    - `/api/ping` trả `{"ok": true, ...}` kèm `path`, `root_path`, `raw_path`, `vercel_region` (chưa có `select 1`, việc của Task 0.5).

@@ -119,7 +119,7 @@ Server: `GET /stream` đòi bearer (sai hoặc thiếu: 401 JSON `{"detail": ...
 Cell 1 (cần repo đã push công khai, xem [user-checklist.md](user-checklist.md) giai đoạn A):
 
 ```python
-!git clone https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag
+!git clone -b feat/rag-v1 --depth 1 https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag  # đến khi merge vào main (main không có kaggle/)
 !pip install -q pyngrok fastapi uvicorn
 ```
 
@@ -209,7 +209,7 @@ Checker in `PASS` khi **tất cả** đúng:
 |---|---|---|
 | `vercel.json` (gốc repo) | 2 service `web` và `api`, rewrite, `git.deploymentEnabled=false`, `maxDuration`, region | **giữ** (Task 6.3 dùng) |
 | `backend/app/api/spike.py` | `GET /api/ping`, `GET /api/sse`; chỉ gắn vào app khi `ENABLE_SPIKE_ENDPOINTS=1` (mặc định tắt) | xóa file, khối `include_router` trong `app/main.py`, `tests/api/test_spike.py` |
-| `.github/workflows/spike-deploy.yml` | `workflow_dispatch`: `vercel pull`, `build`, `deploy --prebuilt` | xóa |
+| `.github/workflows/spike-deploy.yml` | `workflow_dispatch` hoặc push `spike/**`: `vercel pull`, `build`, `deploy --prebuilt` | xóa |
 | `scripts/spike_vercel_check.py` | checker chạy trên máy bạn, dùng lại `parse_sse` và `evaluate` của `scripts/spike_sse_check.py` | xóa (cùng script SSE) |
 
 ### Đã tra cứu (2026-11-23), tài liệu chứ không phải số đo
@@ -260,7 +260,7 @@ Lý do: (1) Services là cách tài liệu hiện hành mô tả Next.js + FastA
 1. `npm i -g vercel@66.6.0`, `vercel login`, `vercel link` trong thư mục repo (project mới). Lấy `orgId`, `projectId` từ `.vercel/project.json`.
 2. GitHub, Settings, Secrets and variables, Actions (cấp repo): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. Không dán giá trị vào chat.
 3. Tùy chọn: Vercel, Project, Deployment Protection, tạo Protection Bypass for Automation; trên máy bạn `export VERCEL_AUTOMATION_BYPASS_SECRET=...` (PowerShell: `$env:VERCEL_AUTOMATION_BYPASS_SECRET="..."`). Spike **không cần DB hay LLM**, nên chưa cần đặt env Vercel nào khác.
-4. Đẩy nhánh lên GitHub, tab Actions, `spike-deploy`, **Run workflow**. Workflow chỉ chạy tay. URL preview nằm ở job summary.
+4. Đẩy nhánh spike: `git push origin feat/rag-v1:spike/vercel` (workflow `spike-deploy` chạy khi đẩy `spike/**`; **Run workflow** chỉ hiện khi workflow nằm trên nhánh mặc định, mà `main` chưa có workflow). URL preview nằm ở job summary.
 5. Trên máy bạn:
 
    ```bash

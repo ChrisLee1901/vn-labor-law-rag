@@ -9,7 +9,7 @@ Workflow: `.github/workflows/ci.yml` (chạy trên `pull_request` và `push` và
 **[USER] Bật branch protection cho `main`** (sau khi repo đã có trên GitHub và `ci-ok` đã chạy ít nhất một lần):
 
 1. Settings, Branches, Add branch ruleset (hoặc Add classic branch protection rule), áp cho `main`.
-2. Bật "Require a pull request before merging".
+2. Bật "Require a pull request before merging". Chủ repo làm một mình thì đặt Required approvals = 0 (không thì không tự merge được).
 3. Bật "Require status checks to pass", thêm đúng một check: `ci-ok`.
 4. Bật "Require branches to be up to date before merging" (khuyến nghị).
 
@@ -25,7 +25,7 @@ Workflow: `.github/workflows/ci.yml` (chạy trên `pull_request` và `push` và
 | `kaggle` | `kaggle/**`, `ruff.toml` | ruff, pytest gateway với model giả (CPU) |
 | `db` | `supabase/**`, `pipelines/pyproject.toml`, `ruff.toml` | pytest `supabase/tests` trên Postgres pgvector |
 | `eval-retrieval` | `backend/app/retrieval/**`, `backend/app/legal/**`, `supabase/migrations/**`, `eval/**`, `pipelines/rag_pipelines/**`, lockfile, `scripts/eval_gate_precheck.py`, `ruff.toml`, `ci.yml`, `eval-retrieval.yml` | gate truy xuất (workflow tái sử dụng `eval-retrieval.yml`), xem dưới |
-| `secrets` | luôn | gitleaks quét toàn bộ lịch sử |
+| `secrets` | luôn | gitleaks quét các commit của PR / push (toàn bộ lịch sử: chạy tay `gitleaks git` ở máy) |
 | `ci-ok` | luôn | tổng hợp |
 | `deploy-preview` | PR cùng repo (không fork, không Dependabot), sau `ci-ok` xanh | workflow tái sử dụng `deploy.yml`: Vercel preview, comment URL, Playwright offline + docs. Không nằm trong `needs` của `ci-ok` |
 | `deploy-prod` | `push` vào `main`, sau `ci-ok` xanh | `deploy.yml`: `migrate` (Environment `production`, guard migration) rồi `deploy` (Vercel `--prod`, smoke `/api/health`). Không nằm trong `needs` của `ci-ok` |

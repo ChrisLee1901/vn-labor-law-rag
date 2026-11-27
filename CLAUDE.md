@@ -13,7 +13,7 @@ Project portfolio (CV): RAG pháp luật lao động tiếng Việt end-to-end. 
 2. `backend/` deploy lên Vercel: **cấm** `torch`, `transformers`, `sentence-transformers`, `langchain`, `llama-index`. Mọi thứ nặng nằm ở `pipelines/` (không deploy) hoặc `kaggle/`.
 3. Unicode **NFC** ở cả ingest lẫn query (`app.legal.normalize.nfc`).
 4. LLM có thể vắng mặt bất cứ lúc nào. Mọi đường code gọi gateway phải có timeout và đường offline: FTS-only, câu trả lời dựng sẵn, badge.
-5. Supabase chỉ có **1 project**. Migration chỉ additive. Muốn thay index thì ingest `--index-version N` mới rồi đổi `app_config.active_index_version`. Không xóa hoặc ghi đè index đang active. Test và CI chạy DB local (`supabase start` / `supabase db start`), **không** chạm project thật.
+5. Supabase chỉ có **1 project**. Migration chỉ additive. Muốn thay index thì ingest `--index-version N` mới rồi đổi `app_config.active_index_version`. Không xóa hoặc ghi đè index đang active. Test và CI chạy Postgres pgvector tạm (local: Docker `rag-pg` qua `scripts/test-db.sh`, cổng 54329; CI: service `pgvector/pgvector:pg17`), **không** chạm project thật.
 6. Secrets chỉ nằm trong Kaggle Secrets / Vercel env / GitHub Secrets. Không commit `.env`, token, URL ngrok kèm key.
 7. `LLM_BASE_URL` phải qua allowlist regex ngrok (chống SSRF). Gateway luôn đòi bearer token (trừ `/health`).
 8. Kaggle ToS: notebook chỉ bật khi demo. Không viết code giữ notebook chạy liên tục hay tự khởi động lại, không công khai URL tunnel.
@@ -41,13 +41,13 @@ uv run fastapi dev app/main.py                      # local API tại :8000
 # Pipelines (không deploy)
 cd pipelines && uv sync
 uv run python -m rag_pipelines.download --docs ../docs/corpus/legal_docs.yaml --out ../docs/corpus/raw
-uv run python -m rag_pipelines.ingest --index-version N        # cần Kaggle bật (embedding)
+uv run python -m rag_pipelines.ingest --index-version N        # cần Kaggle bật (embedding); lần đầu thêm --force (v1 đang active nhưng rỗng)
 uv run python -m rag_pipelines.export_index --index-version N
 uv run python -m rag_pipelines.eval.retrieval_eval --index ../eval/index/v1.parquet --golden ../eval/golden/v1.jsonl --modes fts,dense,hybrid --split test
 
 # DB local (Docker)
-supabase start && supabase db reset                # áp migrations
-uv run --project pipelines pytest supabase/tests -v
+bash scripts/test-db.sh                            # Docker rag-pg :54329 (pgvector pg17)
+uv run --project pipelines pytest supabase/tests -v   # tự tạo DB tạm và áp migrations
 
 # Frontend
 cd frontend && pnpm install && pnpm dev            # :3000; dùng mock SSE khi backend chưa chạy
@@ -55,7 +55,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm exec playwright test
 
 # Kaggle gateway tests (CPU, fake models)
-uv run --with-requirements kaggle/requirements.txt pytest kaggle/tests -v
+uv run --with-requirements kaggle/requirements-test.txt pytest kaggle/tests -v
 python scripts/smoke_llm.py                         # cần LLM_BASE_URL, LLM_API_KEY
 ```
 
@@ -66,15 +66,16 @@ python scripts/smoke_llm.py                         # cần LLM_BASE_URL, LLM_AP
 | `DATABASE_URL` | Vercel, local `.env` | Pooler Supabase cổng 6543 (`prepare_threshold=None`) |
 | `LLM_BASE_URL`, `LLM_API_KEY` | Vercel, local | Gateway Kaggle qua ngrok domain tĩnh |
 | `CRON_SECRET` | Vercel, GitHub | `/api/cron/keepalive` |
+| `NEXT_PUBLIC_SITE_URL`, `VERCEL_AUTOMATION_BYPASS_SECRET`, biến repo `PROD_URL` | Vercel / GitHub | metadata trang, preview qua bypass, keep-alive (chi tiết `docs/deploy.md`) |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | Vercel | Tracing |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Vercel | Rate limit |
 | `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `GATEWAY_API_KEY`, `HF_TOKEN` | Kaggle Secrets | Notebook serve |
-| `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` | GitHub Secrets | CD + migration |
+| `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` | GitHub Secrets (3 biến Supabase nằm trong Environment `production`) | CD + migration |
 
 ## Dữ liệu
 
 - `docs/corpus/raw/<code>/`: file gốc tải từ congbao.chinhphu.vn / datafiles.chinhphu.vn. Văn bản QPPL không được bảo hộ quyền tác giả (Điều 15 Luật SHTT), được commit. Đây là dữ liệu không tin cậy: chỉ parse, không thực thi.
-- `docs/corpus/docx/`: bản `.docx` chuyển từ `.doc` bằng LibreOffice (commit).
+- `docs/corpus/docx/`: bản `.docx` chuyển từ `.doc` bằng LibreOffice (chưa có thư mục này; `extract` rơi về PDF/DOC trong `raw/`).
 - `eval/golden/v1.jsonl`: 120 câu (dev 40 / test 80), nhãn cấp Điều. **Chỉ báo số liệu trên split test.** Chỉnh τ và prompt trên split dev.
 - `eval/index/`, `eval/cache/`: index đóng băng và embedding câu hỏi đã cache cho CI. Đổi chunking hoặc embedder thì phải refresh (cần Kaggle bật).
 

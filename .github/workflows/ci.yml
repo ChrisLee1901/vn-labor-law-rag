@@ -34,9 +34,11 @@ jobs:
           filters: |
             web:
               - 'frontend/**'
+              - 'vercel.json'
               - '.github/workflows/ci.yml'
             api:
               - 'backend/**'
+              - 'vercel.json'
               - 'supabase/migrations/**'
               - 'docs/api-contract.md'
               - 'scripts/pyright_ratchet.py'
@@ -55,16 +57,22 @@ jobs:
               - '.github/workflows/ci.yml'
             kaggle:
               - 'kaggle/**'
+              - 'backend/uv.lock'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             db:
               - 'supabase/**'
               - 'pipelines/pyproject.toml'
+              - 'pipelines/uv.lock'
+              - 'backend/uv.lock'
               - 'ruff.toml'
               - '.github/workflows/ci.yml'
             eval:
               - 'backend/app/retrieval/**'
               - 'backend/app/legal/**'
+              - 'backend/app/db.py'
+              - 'backend/app/config.py'
+              - 'backend/pyproject.toml'
               - 'supabase/migrations/**'
               - 'eval/**'
               - 'pipelines/rag_pipelines/**'
@@ -300,8 +308,11 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
+    # GitHub kiểm tra tĩnh: quyền của bên gọi phải bao quyền mọi job con (kể cả `preview` cần pull-requests: write dù không chạy ở production).
+    # Trần `contents: read` ở deploy.yml vẫn áp cho migrate / deploy.
     permissions:
       contents: read
+      pull-requests: write
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
