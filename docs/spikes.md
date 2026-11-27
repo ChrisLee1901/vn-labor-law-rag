@@ -8,7 +8,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 | [#sse](#sse) | 0.3 | ĐẠT 2026-11-27: 150/150 event, không cắt, không dồn cục |
 | [#vercel](#vercel) | 0.4 | code đã viết (`vercel.json`, `backend/app/api/spike.py`, `spike-deploy.yml`, `scripts/spike_vercel_check.py`), chưa chạy với project Vercel thật |
 | [#supabase](#supabase) | 0.5 | chưa chạy |
-| [#bench](#bench) | 2.3 | code đã viết (`scripts/smoke_llm.py`), chưa chạy với gateway live |
+| [#bench](#bench) | 2.3 | ĐẠT 2026-11-27: TTFT p50 0,77 s, 36,5 tok/s |
 
 ---
 
@@ -341,7 +341,7 @@ Tiêu chí đạt (plan Task 0.5): ghi `extversion` của `vector` (>= 0.8.0 th�
 
 ## bench: smoke và benchmark LLM qua tunnel, Task 2.3
 
-**Trạng thái: code đã viết (`scripts/smoke_llm.py`, test `pipelines/tests/test_smoke_llm.py` với gateway giả), chưa chạy với gateway live.** Mọi số bên dưới còn `TBD — chờ chạy`.
+**Trạng thái: ĐẠT (2026-11-27)**, chạy với gateway live qua ngrok (`scripts/smoke_llm.py --runs 3`). Chưa đo `/tokenize` cho slot 8192 token, xem mục chưa kiểm chứng.
 
 **Mục đích.** Từ máy bạn, qua tunnel ngrok thật, kiểm gateway Kaggle đủ dùng: `/health` báo LLM sẵn sàng; embed ra 1024 chiều; rerank xếp đúng đoạn lên đầu; chat stream tiếng Việt có dấu đúng, đo TTFT và tok/s. Script chỉ dùng thư viện chuẩn, không ghi file, không in key (host bị che nhãn đầu).
 
@@ -390,14 +390,14 @@ Công thức: **TTFT** = từ lúc gửi request (gồm bắt tay TCP/TLS qua ng
 |---|---|
 | Ngày chạy (UTC) | 2026-11-27 |
 | `verdict` | PASS |
-| `health` (status, llm, embedder, reranker, model) | TBD — chờ chạy |
-| Embeddings: chiều, cosine, ms lần đầu / lần lặp | TBD — chờ chạy |
-| Rerank: thứ tự, điểm | TBD — chờ chạy |
-| TTFT từng lần (s) | TBD — chờ chạy |
-| TTFT p50 / p95 (s) | TBD — chờ chạy |
-| tok/s từng lần và median, nguồn token (usage hay xấp xỉ) | TBD — chờ chạy |
-| 200 ký tự đầu của câu trả lời lần 1, có dấu đúng? NFC? | TBD — chờ chạy |
-| Cấu hình lúc đo (quant Q5_K_M hay Q4_K_M, `-ngl`, `-c`, vùng ngrok) | TBD — chờ chạy |
+| `health` (status, llm, embedder, reranker, model) | status=ok, llm=True, embedder=True, reranker=True, model=None (gateway không trả tên model) |
+| Embeddings: chiều, cosine, ms lần đầu / lần lặp | 1024 / 1024, cosine 0,395, 1121 ms / 938 ms |
+| Rerank: thứ tự, điểm | thứ tự [1, 2, 0], điểm [0,998, 0,0, 0,0]; đoạn liên quan (index 1) đứng đầu |
+| TTFT từng lần (s) | 0,80 / 0,72 / 0,77 |
+| TTFT p50 / p95 (s) | 0,77 / 0,79 (ngưỡng p50 < 3,0): ĐẠT |
+| tok/s từng lần và median, nguồn token (usage hay xấp xỉ) | 34,6 / 36,6 / 36,5, median 36,5, nguồn `usage` (29 token mỗi lần) |
+| 200 ký tự đầu của câu trả lời lần 1, có dấu đúng? NFC? | "Mức lương tối thiểu vùng I năm 2024 là 4.420.000 đồng/tháng." Có dấu đúng, kiểm tra tự động PASS |
+| Cấu hình lúc đo (quant Q5_K_M hay Q4_K_M, `-ngl`, `-c`, vùng ngrok) | Q5_K_M, `-ngl 99`, `-c 16384 -np 2`, 2026-11-27 16:52 UTC; vùng ngrok chưa ghi |
 
 ### Nếu lỗi
 
