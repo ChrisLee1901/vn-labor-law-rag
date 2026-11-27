@@ -122,7 +122,7 @@ Cell 1 (cần repo đã push công khai, xem [user-checklist.md](user-checklist.
 
 ```python
 !git clone -b feat/rag-v1 --depth 1 https://github.com/<TÀI-KHOẢN>/vn-labor-law-rag  # đến khi merge vào main (main không có kaggle/)
-!pip install -q pyngrok fastapi uvicorn
+!pip install -q pyngrok==7.2.3 fastapi==0.115.6 uvicorn==0.34.0
 ```
 
 Chưa push repo: tải `kaggle/spike_sse.py` lên làm Dataset rồi `!cp /kaggle/input/<dataset>/spike_sse.py .`, hoặc dán nội dung file vào một cell bắt đầu bằng `%%writefile spike_sse.py` (rồi dùng `spike_sse.py` thay cho đường dẫn ở cell 2).
