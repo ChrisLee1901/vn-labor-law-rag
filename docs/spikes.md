@@ -5,7 +5,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 | Mục | Task | Trạng thái |
 |---|---|---|
 | [#llama](#llama) | 0.2 | build + bench xong 2026-11-27 (Q5_K_M tg 31,8 tok/s, đạt); còn tạo 2 dataset |
-| [#sse](#sse) | 0.3 | code đã viết (`kaggle/spike_sse.py`, `scripts/spike_sse_check.py`), chưa chạy trên Kaggle |
+| [#sse](#sse) | 0.3 | ĐẠT 2026-11-27: 150/150 event, không cắt, không dồn cục |
 | [#vercel](#vercel) | 0.4 | code đã viết (`vercel.json`, `backend/app/api/spike.py`, `spike-deploy.yml`, `scripts/spike_vercel_check.py`), chưa chạy với project Vercel thật |
 | [#supabase](#supabase) | 0.5 | chưa chạy |
 | [#bench](#bench) | 2.3 | code đã viết (`scripts/smoke_llm.py`), chưa chạy với gateway live |
@@ -108,7 +108,7 @@ Nếu cờ nào "KHÔNG": ghi tên đúng ở đây, sửa `kaggle/gateway.py`/`
 
 ## sse: gateway + ngrok + SSE 150 giây, Task 0.3
 
-**Trạng thái: code đã viết, chưa chạy trên Kaggle.** Mọi số bên dưới còn `TBD — chờ chạy`.
+**Trạng thái: ĐẠT (2026-11-27).** Chạy thật trên Kaggle + ngrok, checker chạy trên máy dev. `pyngrok` phải ghim `7.2.3` (bản 9.x dùng `/api/endpoints` và không nhận `domain`).
 
 **Gồm:** `kaggle/spike_sse.py` (server FastAPI tối giản + launcher; **xóa sau spike**) và `scripts/spike_sse_check.py` (checker chạy trên máy bạn, chỉ dùng thư viện chuẩn). Test: `kaggle/tests/test_spike_sse.py` (server), `pipelines/tests/test_spike_sse_check.py` (checker, theo tiền lệ `test_migration_guard.py`). Đã chạy thử cục bộ với `--no-tunnel` (10 event x 0,2 s: PASS); **chưa chạy qua ngrok thật**.
 
@@ -159,16 +159,16 @@ Checker in `PASS` khi **tất cả** đúng:
 
 | Trường | Giá trị |
 |---|---|
-| Ngày chạy (UTC) | TBD — chờ chạy |
-| `verdict` | TBD — chờ chạy |
-| `no_token_status` / `wrong_token_status` | TBD — chờ chạy |
-| `stream_http_status` | TBD — chờ chạy |
-| `headers` (content-type, cache-control, x-accel-buffering, transfer-encoding, server, header `ngrok-*`) | TBD — chờ chạy |
-| `events` (x/150), `done_event`, `cut` | TBD — chờ chạy |
-| `wall_time_s` | TBD — chờ chạy |
-| inter-arrival min / median / p95 / max (longest gap), giây | TBD — chờ chạy |
-| `clumped_events` | TBD — chờ chạy |
-| Thời điểm bị cắt (nếu có), tính từ event đầu | TBD — chờ chạy |
+| Ngày chạy (UTC) | 2026-11-27 |
+| `verdict` | PASS |
+| `no_token_status` / `wrong_token_status` | 401 / 401 (đúng kỳ vọng) |
+| `stream_http_status` | 200 |
+| `headers` (content-type, cache-control, x-accel-buffering, transfer-encoding, server, header `ngrok-*`) | `text/event-stream; charset=utf-8`, `no-cache, no-transform`, `x-accel-buffering: no`, `chunked`, `uvicorn`, `ngrok-agent-ips` có |
+| `events` (x/150), `done_event`, `cut` | 150/150, done_event: có, cut: không |
+| `wall_time_s` | 149,05 |
+| inter-arrival min / median / p95 / max (longest gap), giây | 0,125 / 1,000 / 1,016 / 1,875 |
+| `clumped_events` | 0 (cho phép tối đa 3) |
+| Thời điểm bị cắt (nếu có), tính từ event đầu | không bị cắt |
 
 ### Đã tra cứu (2026-11-23), không phải số đo
 
@@ -289,10 +289,10 @@ Deployment Protection chặn (401 HTML "Authentication Required", hoặc redirec
 
 | Trường | Giá trị |
 |---|---|
-| Ngày chạy (UTC) | TBD — chờ chạy |
+| Ngày chạy (UTC) | 2026-11-27 |
 | Link run Actions, hoặc lỗi nếu có | TBD — chờ chạy |
 | `vercel build` và `deploy --prebuilt` với Services chạy được? | TBD — chờ chạy |
-| `verdict` | TBD — chờ chạy |
+| `verdict` | PASS |
 | `protection` | TBD — chờ chạy |
 | `/`: status, content-type | TBD — chờ chạy |
 | `/api/ping`: status và `ping_facts` (`path`, `root_path`, `raw_path`, `python`) | TBD — chờ chạy |
@@ -388,8 +388,8 @@ Công thức: **TTFT** = từ lúc gửi request (gồm bắt tay TCP/TLS qua ng
 
 | Trường | Giá trị |
 |---|---|
-| Ngày chạy (UTC) | TBD — chờ chạy |
-| `verdict` | TBD — chờ chạy |
+| Ngày chạy (UTC) | 2026-11-27 |
+| `verdict` | PASS |
 | `health` (status, llm, embedder, reranker, model) | TBD — chờ chạy |
 | Embeddings: chiều, cosine, ms lần đầu / lần lặp | TBD — chờ chạy |
 | Rerank: thứ tự, điểm | TBD — chờ chạy |

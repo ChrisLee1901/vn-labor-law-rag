@@ -132,10 +132,10 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 **Files:** Create `kaggle/spike_sse.py` (bỏ đi sau spike).
 
 - [x] Trên Kaggle, viết FastAPI tối giản: `GET /stream` phát 1 event mỗi giây trong 150 giây, có bearer token. — *đã viết + test local: kaggle/spike_sse.py, scripts/spike_sse_check.py (dry-run local PASS); chưa chạy trên Kaggle/ngrok thật*
-- [ ] Mở tunnel bằng `pyngrok` hoặc binary ngrok với `--url=<dev-domain>`, authtoken lấy từ Kaggle Secrets. — *chờ live batch: cần Kaggle + ngrok thật*
-- [ ] Từ máy local, chạy `curl -N -H "Authorization: Bearer …" https://<domain>/stream`. **Đạt** khi nhận đủ 150 event, không bị cắt và không bị buffer dồn cục. Ghi kết quả vào spikes. — *chờ live batch: cần Kaggle + ngrok thật*
-- [ ] Nếu ngrok cắt stream: ghi lại, rồi thử Cloudflare named tunnel (cần domain). Báo người dùng trước khi chọn phương án khác. — *chờ live batch: cần Kaggle + ngrok thật*
-- [ ] Kiểm tra request không có token trả 401. — *chờ live batch: cần Kaggle + ngrok thật*
+- [x] Mở tunnel bằng `pyngrok` hoặc binary ngrok với `--url=<dev-domain>`, authtoken lấy từ Kaggle Secrets. — *xong 2026-11-27, PASS 150/150, xem docs/spikes.md#sse (pyngrok phải ghim 7.2.3)*
+- [x] Từ máy local, chạy `curl -N -H "Authorization: Bearer …" https://<domain>/stream`. **Đạt** khi nhận đủ 150 event, không bị cắt và không bị buffer dồn cục. Ghi kết quả vào spikes.
+- [x] Nếu ngrok cắt stream: ghi lại, rồi thử Cloudflare named tunnel (cần domain). Báo người dùng trước khi chọn phương án khác. — *không cắt, nên không cần Cloudflare tunnel*
+- [x] Kiểm tra request không có token trả 401.
 
 ### Task 0.4: Spike Vercel Services + deploy từ Actions
 
