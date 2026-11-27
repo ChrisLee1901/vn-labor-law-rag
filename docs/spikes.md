@@ -4,7 +4,7 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 
 | Mục | Task | Trạng thái |
 |---|---|---|
-| [#llama](#llama) | 0.2 | notebook đã viết, chưa chạy trên Kaggle |
+| [#llama](#llama) | 0.2 | build + bench xong 2026-11-27 (Q5_K_M tg 31,8 tok/s, đạt); còn tạo 2 dataset |
 | [#sse](#sse) | 0.3 | code đã viết (`kaggle/spike_sse.py`, `scripts/spike_sse_check.py`), chưa chạy trên Kaggle |
 | [#vercel](#vercel) | 0.4 | code đã viết (`vercel.json`, `backend/app/api/spike.py`, `spike-deploy.yml`, `scripts/spike_vercel_check.py`), chưa chạy với project Vercel thật |
 | [#supabase](#supabase) | 0.5 | chưa chạy |
@@ -18,14 +18,14 @@ Mỗi mục dưới đây do task tương ứng điền khi chạy thật. `TBD`
 
 **Mục đích.** Xác nhận llama.cpp build được cho T4 (compute capability 7.5), tạo hai Kaggle Dataset mà `kaggle/serve.ipynb` (Task 2.2) tiêu thụ, đo tốc độ Qwen3-8B và chốt tên các cờ `llama-server` đang được giả định.
 
-**Notebook:** `kaggle/build_llamacpp.ipynb` (chạy một lần, không giữ phiên sống). Đã kiểm tra bằng test CPU (`kaggle/tests/test_build_llamacpp_notebook.py`): cú pháp, cờ cmake, hàm parse. **Chưa chạy trên Kaggle** nên mọi số bên dưới còn `TBD`.
+**Notebook:** `kaggle/build_llamacpp.ipynb` (chạy một lần, không giữ phiên sống). Đã kiểm tra bằng test CPU (`kaggle/tests/test_build_llamacpp_notebook.py`): cú pháp, cờ cmake, hàm parse. Đã chạy thật trên Kaggle ngày 2026-11-27 (lần thứ 3), số liệu ở bảng bên dưới.
 
 **Đã tra cứu (2026-11-23), không phải số đo:**
 
 - Tag llama.cpp `b12651` tồn tại, trỏ tới commit `f5e6915c28f10330885fcb9243a93ae98d3115ab` (GitHub API). Notebook ghim tag này (`LLAMA_CPP_REF`).
 - `LLAMA_CURL` trong `CMakeLists.txt` hiện chỉ còn là cảnh báo deprecated (không còn `option`), và `LLAMA_OPENSSL` mặc định ON. Notebook không truyền `-DLLAMA_CURL=OFF`, mà truyền `-DLLAMA_OPENSSL=OFF`. (`kaggle/serve.ipynb` cell 2 cũng đã đổi sang `-DLLAMA_OPENSSL=OFF` và dùng cùng cách tìm stub libcuda.)
 - Repo HF `Qwen/Qwen3-8B-GGUF` có cả `Qwen3-8B-Q5_K_M.gguf` (5,85 GB) và `Qwen3-8B-Q4_K_M.gguf` (5,03 GB). Bản `unsloth/Qwen3-8B-GGUF` cũng có hai file này; notebook chỉ dùng nó khi repo chính thức thiếu file.
-- README `tools/server` của llama.cpp (master) ghi: `--jinja`, `-fa, --flash-attn [on|off|auto]` (mặc định `auto`), `--chat-template-kwargs STRING`, `--api-key KEY`, `--reasoning-budget N`, `-np, --parallel N`, `-c, --ctx-size N`, `--host`, `--port`. Đây là tài liệu của master, **chưa** phải `--help` của bản build trên Kaggle: bảng "Cờ" dưới đây vẫn `TBD`.
+- README `tools/server` của llama.cpp (master) ghi: `--jinja`, `-fa, --flash-attn [on|off|auto]` (mặc định `auto`), `--chat-template-kwargs STRING`, `--api-key KEY`, `--reasoning-budget N`, `-np, --parallel N`, `-c, --ctx-size N`, `--host`, `--port`. Đây là tài liệu của master, **chưa** phải `--help` của bản build trên Kaggle: bảng "Cờ" dưới đây đã đối chiếu với `--help` thật (2026-11-27).
 
 ### Cách chạy (khớp [user-checklist.md](user-checklist.md) giai đoạn C1, bước 1 đến 6)
 
@@ -59,20 +59,20 @@ Thư viện CUDA runtime (`libcudart`, `libcublas`...) không nằm trong datase
 
 | Trường | Giá trị |
 |---|---|
-| Ngày chạy (UTC) | TBD — chờ chạy trên Kaggle |
-| llama.cpp ref / commit | TBD — chờ chạy trên Kaggle (dự kiến `b12651` / `f5e6915c...`; giá trị thật in trong RESULT) |
-| `llama-server --version` | TBD — chờ chạy trên Kaggle |
-| CUDA toolkit | TBD — chờ chạy trên Kaggle |
-| GPU (tên, VRAM, driver) | TBD — chờ chạy trên Kaggle |
-| Thời gian build (phút) | TBD — chờ chạy trên Kaggle |
-| `stub_dir`, `stub_file`, `configure_variant` (libcuda stub) | TBD — chờ chạy trên Kaggle |
-| Dung lượng `llamacpp-sm75-bin` (MB) | TBD — chờ chạy trên Kaggle |
-| GGUF dùng (repo, MB) | TBD — chờ chạy trên Kaggle |
-| Q5_K_M: pp4096 tok/s | TBD — chờ chạy trên Kaggle |
-| Q5_K_M: tg256 tok/s | TBD — chờ chạy trên Kaggle |
-| Q5_K_M đạt (tg >= 15)? | TBD — chờ chạy trên Kaggle |
-| Q4_K_M: pp4096 / tg256 tok/s (chỉ khi Q5 không đạt) | TBD — chờ chạy trên Kaggle |
-| Tên hai dataset đã tạo | TBD — chờ chạy trên Kaggle |
+| Ngày chạy (UTC) | 2026-11-27 10:22 |
+| llama.cpp ref / commit | `b12651` (ghim) / `f5e6915c28f10330885fcb9243a93ae98d3115ab` |
+| `llama-server --version` | version: 1.0.0-dev (build 1, commit f5e6915), GNU 13.3.0, Linux x86_64 |
+| CUDA toolkit | 13.0 (cmake 3.31.10) |
+| GPU (tên, VRAM, driver) | 2 x Tesla T4, 15360 MiB, driver 580.178.04, cc 7.5 |
+| Thời gian build (phút) | 34,5 (nproc=4) |
+| `stub_dir`, `stub_file`, `configure_variant` (libcuda stub) | `/tmp/cuda-stub`, `/usr/local/cuda-13.0/compat/libcuda.so.580.126.20` (compat của toolkit), `cmake-library-path` |
+| Dung lượng `llamacpp-sm75-bin` (MB) | 215 |
+| GGUF dùng (repo, MB) | `Qwen/Qwen3-8B-GGUF`, `Qwen3-8B-Q5_K_M.gguf`, 5851 |
+| Q5_K_M: pp4096 tok/s | 1063,6 |
+| Q5_K_M: tg256 tok/s | 31,8 |
+| Q5_K_M đạt (tg >= 15)? | ĐẠT |
+| Q4_K_M: pp4096 / tg256 tok/s (chỉ khi Q5 không đạt) | không cần (Q5 đạt) |
+| Tên hai dataset đã tạo | chờ chủ repo tạo từ tab Output (TBD) |
 
 ### Cờ cần xác nhận (`llama-server --help`)
 
@@ -80,14 +80,14 @@ Cột "giả định" là điều `kaggle/serve.ipynb` cell 3 hoặc plan đang 
 
 | Cờ | Giả định (nơi dùng) | Có trong `--help`? |
 |---|---|---|
-| `--jinja` | bật chat template Jinja, cần cho `--chat-template-kwargs` (serve cell 3) | TBD — chờ chạy trên Kaggle |
-| `-fa` / `--flash-attn` | research note (`llm_serving_kaggle.md`) viết `-fa on`; README master ghi `-fa [on\|off\|auto]` (có giá trị), bản cũ là cờ không giá trị. Serve **chưa** dùng. Ghi lại dòng help chính xác | TBD — chờ chạy trên Kaggle |
-| `--chat-template-kwargs` | `{"enable_thinking": false}` để tắt thinking của Qwen3 (serve cell 3) | TBD — chờ chạy trên Kaggle |
-| `--api-key` | research note ví dụ `--api-key $LLM_KEY`; plan/serve **không** truyền cờ này (gateway đòi bearer, llama-server chỉ nghe 127.0.0.1) | TBD — chờ chạy trên Kaggle |
-| `--reasoning-budget` | `--reasoning-budget 0` tắt thinking lớp thứ hai (serve cell 3) | TBD — chờ chạy trên Kaggle |
-| `-np` | `-np 2` hai slot song song (serve cell 3) | TBD — chờ chạy trên Kaggle |
-| `-c` | `-c 16384` (serve cell 3) | TBD — chờ chạy trên Kaggle |
-| `--host`, `--port` | `127.0.0.1`, `8080` (serve cell 3) | TBD — chờ chạy trên Kaggle |
+| `--jinja` | bật chat template Jinja, cần cho `--chat-template-kwargs` (serve cell 3) | CÓ (xác nhận 2026-11-27) |
+| `-fa` / `--flash-attn` | research note (`llm_serving_kaggle.md`) viết `-fa on`; README master ghi `-fa [on\|off\|auto]` (có giá trị), bản cũ là cờ không giá trị. Serve **chưa** dùng. Ghi lại dòng help chính xác | CÓ (xác nhận 2026-11-27) |
+| `--chat-template-kwargs` | `{"enable_thinking": false}` để tắt thinking của Qwen3 (serve cell 3) | CÓ (xác nhận 2026-11-27) |
+| `--api-key` | research note ví dụ `--api-key $LLM_KEY`; plan/serve **không** truyền cờ này (gateway đòi bearer, llama-server chỉ nghe 127.0.0.1) | CÓ (xác nhận 2026-11-27) |
+| `--reasoning-budget` | `--reasoning-budget 0` tắt thinking lớp thứ hai (serve cell 3) | CÓ (xác nhận 2026-11-27) |
+| `-np` | `-np 2` hai slot song song (serve cell 3) | CÓ (xác nhận 2026-11-27) |
+| `-c` | `-c 16384` (serve cell 3) | CÓ (xác nhận 2026-11-27) |
+| `--host`, `--port` | `127.0.0.1`, `8080` (serve cell 3) | CÓ (xác nhận 2026-11-27) |
 
 Nếu cờ nào "KHÔNG": ghi tên đúng ở đây, sửa `kaggle/gateway.py`/`kaggle/build_notebook.py` (cell 3), sinh lại `serve.ipynb`. Đừng sửa tay `serve.ipynb`.
 

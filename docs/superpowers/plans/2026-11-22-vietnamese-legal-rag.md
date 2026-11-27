@@ -121,11 +121,11 @@ Mục tiêu: trả lời 4 câu hỏi chưa kiểm chứng trước khi viết c
 **Files:** Create `kaggle/build_llamacpp.ipynb` (một lần), ghi kết quả vào `docs/spikes.md#llama`.
 
 - [ ] `[USER]` Tạo notebook Kaggle, chọn **GPU T4 x2**, bật Internet. — *chờ [USER]*
-- [ ] Build: `cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 && cmake --build build -j --target llama-server llama-bench`. Tạo symlink `libcuda.so` nếu linker báo thiếu. — *chờ live batch: cần Kaggle T4 x2 thật* — *notebook đã viết: kaggle/build_llamacpp.ipynb; chờ chạy trên Kaggle*
-- [ ] Đóng gói `build/bin/*` cùng **mọi file `.so`** vào output, rồi tạo Kaggle Dataset `llamacpp-sm75-bin` (private). — *chờ live batch: cần Kaggle T4 x2 thật*
+- [x] Build: `cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 && cmake --build build -j --target llama-server llama-bench`. Tạo symlink `libcuda.so` nếu linker báo thiếu. — *xong 2026-11-27: build 34,5 phút, xem docs/spikes.md#llama*
+- [ ] Đóng gói `build/bin/*` cùng **mọi file `.so`** vào output, rồi tạo Kaggle Dataset `llamacpp-sm75-bin` (private). — *đã đóng gói 215 MB; chờ chủ repo tạo dataset từ tab Output*
 - [ ] Tải `Qwen3-8B-Q5_K_M.gguf` (repo GGUF chính thức của Qwen trên HF; nếu không có thì dùng bản `unsloth`), lưu thành Kaggle Dataset `qwen3-8b-gguf`. — *chờ live batch: cần Kaggle T4 x2 thật*
-- [ ] Chạy `llama-bench -m … -ngl 99 -p 4096 -n 256`. Ghi pp/tg tok/s vào `docs/spikes.md`. **Đạt** khi tg ≥ 15 tok/s; nếu không, thử Q4_K_M và ghi lại. — *chờ live batch: cần Kaggle T4 x2 thật*
-- [ ] Chạy `llama-server --help`, xác nhận tên cờ `--jinja`, `-fa`, `--chat-template-kwargs`, `--api-key`. Ghi vào spikes. — *chờ live batch: cần Kaggle T4 x2 thật*
+- [x] Chạy `llama-bench -m … -ngl 99 -p 4096 -n 256`. Ghi pp/tg tok/s vào `docs/spikes.md`. **Đạt** khi tg ≥ 15 tok/s; nếu không, thử Q4_K_M và ghi lại. — *Q5_K_M: pp 1063,6 / tg 31,8 tok/s, ĐẠT*
+- [x] Chạy `llama-server --help`, xác nhận tên cờ `--jinja`, `-fa`, `--chat-template-kwargs`, `--api-key`. Ghi vào spikes. — *đủ cờ, xem spikes#llama*
 
 ### Task 0.3: Spike gateway + ngrok + SSE 2 phút
 
